@@ -53,6 +53,7 @@ impl SearchEngine {
     pub fn doc_count(&self) -> usize {
         self.doctable.len()
     }
+
     pub fn into_snapshot(self) -> IndexSnapshot {
         IndexSnapshot {
             doctable: self.doctable,
@@ -65,6 +66,26 @@ impl SearchEngine {
             doctable: snapshot.doctable,
             index: snapshot.index,
         }
+    }
+
+    pub fn index_dir_incremental(&mut self, root: &Path) -> std::io::Result<usize> {
+        let mut added = 0;
+
+        for path in filecrawler::crawl(root)? {
+            let path_str = path.to_string_lossy().to_string();
+
+            if self.doctable.contains_path(&path_str) {
+                continue;
+            }
+
+            let tokens = fileparser::parse_file(&path)?;
+            let doc_id = self.doctable.add_document(path_str);
+
+            self.index.add_document_tokens(doc_id, tokens);
+            added += 1;
+        }
+
+        Ok(added)
     }
 }
 

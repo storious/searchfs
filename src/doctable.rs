@@ -44,6 +44,10 @@ impl DocTable {
     pub fn is_empty(&self) -> bool {
         self.id_to_path.is_empty()
     }
+
+    pub fn contains_path(&self, path: &str) -> bool {
+        self.path_to_id.contains_key(path)
+    }
 }
 
 impl Default for DocTable {

@@ -30,6 +30,26 @@ fn main() -> io::Result<()> {
 
             run_build(&docs, &index)
         }
+
+        Some("update") => {
+            let Some(docs) = args.next() else {
+                print_usage();
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "missing docs path",
+                ));
+            };
+
+            let Some(index) = args.next() else {
+                print_usage();
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "missing index path",
+                ));
+            };
+            run_update(&docs, &index)
+        }
+
         Some("search") => {
             let Some(index) = args.next() else {
                 print_usage();
@@ -53,6 +73,7 @@ fn main() -> io::Result<()> {
 
             run_search(&index, &query, limit, &mode)
         }
+
         _ => {
             print_usage();
             Err(io::Error::new(
@@ -114,6 +135,22 @@ fn run_search(index_path: &str, query: &str, limit: usize, mode_arg: &str) -> io
     for result in results.into_iter().take(limit) {
         println!("{} score={}", result.path, result.score);
     }
+
+    Ok(())
+}
+
+fn run_update(index_path: &str, docs: &str) -> io::Result<()> {
+    let snapshot = snapshot::load(Path::new(index_path))?;
+    let mut engine = SearchEngine::from_snapshot(snapshot);
+
+    let start = Instant::now();
+    let added = engine.index_dir_incremental(Path::new(docs))?;
+    let elapsed = start.elapsed();
+
+    let snapshot = engine.into_snapshot();
+    snapshot::save(Path::new(index_path), &snapshot)?;
+
+    eprintln!("added_docs={} update_time={:.2?}", added, elapsed);
 
     Ok(())
 }
