@@ -1,11 +1,14 @@
 use std::fs;
 use std::path::Path;
 
+use crate::cleaner::clean_project_gutenberg;
 use crate::memindex::Position;
 
 pub fn parse_file(path: &Path) -> std::io::Result<Vec<(String, Position)>> {
     let content = fs::read_to_string(path)?;
-    Ok(tokenize(&content))
+    let cleaned = clean_project_gutenberg(&content);
+
+    Ok(tokenize(cleaned))
 }
 
 pub fn tokenize(content: &str) -> Vec<(String, Position)> {

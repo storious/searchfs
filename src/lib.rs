@@ -4,3 +4,4 @@ pub mod filecrawler;
 pub mod fileparser;
 pub mod memindex;
 pub mod query;
+pub mod cleaner;
