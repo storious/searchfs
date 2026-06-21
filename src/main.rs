@@ -1,5 +1,6 @@
 use std::env;
 use std::path::Path;
+use std::time::Instant;
 
 use searchfs::engine::SearchEngine;
 use searchfs::query::QueryMode;
@@ -25,18 +26,27 @@ fn main() -> std::io::Result<()> {
     let query = query.trim_matches('"');
 
     let mut engine = SearchEngine::new();
+
+    let index_start = Instant::now();
     engine.index_dir(Path::new(&root))?;
+    let index_elapsed = index_start.elapsed();
+
     let stats = engine.stats();
 
+    let search_start = Instant::now();
+    let results = engine.search(query, mode);
+    let search_elapsed = search_start.elapsed();
+
     eprintln!(
-        "indexed docs={} terms={} postings={} positions={}",
+        "indexed docs={} terms={} postings={} positions={} index_time={:.2?}",
         engine.doc_count(),
         stats.terms,
         stats.postings,
         stats.total_positions,
+        index_elapsed,
     );
 
-    let results = engine.search(query, mode);
+    eprintln!("search_time={:.2?}", search_elapsed,);
 
     for result in results.into_iter().take(limit) {
         println!("{} score={}", result.path, result.score);
