@@ -6,6 +6,7 @@ use crate::fileparser;
 use crate::memindex::IndexStats;
 use crate::memindex::InvertedIndex;
 use crate::query::{QueryProcessor, SearchResult};
+use crate::snapshot::IndexSnapshot;
 
 pub struct SearchEngine {
     doctable: DocTable,
@@ -51,6 +52,19 @@ impl SearchEngine {
 
     pub fn doc_count(&self) -> usize {
         self.doctable.len()
+    }
+    pub fn into_snapshot(self) -> IndexSnapshot {
+        IndexSnapshot {
+            doctable: self.doctable,
+            index: self.index,
+        }
+    }
+
+    pub fn from_snapshot(snapshot: IndexSnapshot) -> Self {
+        Self {
+            doctable: snapshot.doctable,
+            index: snapshot.index,
+        }
     }
 }
 

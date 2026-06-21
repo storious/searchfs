@@ -1,10 +1,11 @@
 use crate::doctable::DocId;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub(crate) type Term = String;
 pub(crate) type Position = u64;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct InvertedIndex {
     terms: HashMap<Term, HashMap<DocId, Vec<Position>>>,
 }
