@@ -1,6 +1,6 @@
 # SearchFS
 
-![CI](https://github.com/storious/searchfs/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/storious/searchfs/actions/workflows/ci.yaml/badge.svg)
 
 ## Usage
 

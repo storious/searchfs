@@ -37,6 +37,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: stable
+          cache-dependency-path: sfs/go.sum
 
       - name: Format
         run: test -z "$(gofmt -l .)"
