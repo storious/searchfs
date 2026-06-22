@@ -13,12 +13,13 @@ v0.2.0
 
 v0.3.0
 -------
-- Segment architecture
-- BM25
-- Search statistics
+- Immutable Segments
+- Multi-segment Search
+- Segment Merge
 
 v0.4.0
 -------
+- BM25
 - HTTP API
 - REST search service
 
