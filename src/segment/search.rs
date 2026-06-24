@@ -1,4 +1,4 @@
-use crate::doctable::DocId;
+use crate::index::doctable::DocId;
 use crate::query::SearchResult;
 use crate::segment::reader::SegmentReader;
 
@@ -175,8 +175,8 @@ impl<'a> SegmentSearcher<'a> {
 #[cfg(test)]
 mod tests {
 
-    use crate::doctable::DocTable;
-    use crate::memindex::InvertedIndex;
+    use crate::index::doctable::DocTable;
+    use crate::index::memindex::InvertedIndex;
     use crate::segment::format::Segment;
     use crate::segment::reader::SegmentReader;
     use crate::segment::search::SegmentSearcher;

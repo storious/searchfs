@@ -134,7 +134,7 @@ pub(crate) fn run_search_segments(
         mode_arg
     };
 
-    let terms: Vec<String> = crate::fileparser::tokenize(query)
+    let terms: Vec<String> = crate::index::parser::tokenize(query)
         .into_iter()
         .map(|(term, _)| term)
         .collect();
@@ -168,7 +168,7 @@ pub(crate) fn run_search_segments(
             .then_with(|| a.path.cmp(&b.path))
     });
 
-    eprintln!("fast_search_time={elapsed:.2?}");
+    eprintln!("search_time={elapsed:.2?}");
 
     for result in all_results.into_iter().take(limit) {
         println!("{} score={}", result.path, result.score);

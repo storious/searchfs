@@ -1,5 +1,5 @@
-use crate::doctable::DocTable;
-use crate::memindex::InvertedIndex;
+use crate::index::doctable::DocTable;
+use crate::index::memindex::InvertedIndex;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 

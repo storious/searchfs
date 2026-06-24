@@ -1,8 +1,8 @@
 use std::fs;
 use std::path::Path;
 
-use crate::cleaner::clean_project_gutenberg;
-use crate::memindex::Position;
+use crate::index::cleaner::clean_project_gutenberg;
+use crate::index::memindex::Position;
 
 pub fn parse_file(path: &Path) -> std::io::Result<Vec<(String, Position)>> {
     let content = fs::read_to_string(path)?;

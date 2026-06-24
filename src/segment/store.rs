@@ -5,7 +5,7 @@ use std::fs;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 
-use crate::memindex::InvertedIndex;
+use crate::index::memindex::InvertedIndex;
 
 pub struct SegmentStore {
     root: PathBuf,
@@ -142,8 +142,8 @@ impl SegmentStore {
 
 #[cfg(test)]
 mod tests {
-    use crate::doctable::DocTable;
-    use crate::memindex::InvertedIndex;
+    use crate::index::doctable::DocTable;
+    use crate::index::memindex::InvertedIndex;
     use crate::segment::format::{Manifest, Segment};
     use crate::segment::store::SegmentStore;
     use tempfile::tempdir;

@@ -1,6 +1,6 @@
-use crate::doctable::{DocId, DocTable};
-use crate::fileparser::tokenize;
-use crate::memindex::InvertedIndex;
+use crate::index::doctable::{DocId, DocTable};
+use crate::index::memindex::InvertedIndex;
+use crate::index::parser::tokenize;
 use std::collections::HashMap;
 
 #[derive(Debug, PartialEq)]
@@ -206,8 +206,8 @@ impl<'a> QueryProcessor<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::doctable::DocTable;
-    use crate::memindex::InvertedIndex;
+    use crate::index::doctable::DocTable;
+    use crate::index::memindex::InvertedIndex;
 
     fn build_test_engine() -> (DocTable, InvertedIndex) {
         let mut doctable = DocTable::new();

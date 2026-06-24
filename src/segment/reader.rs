@@ -3,8 +3,8 @@ use std::fs;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
 
-use crate::doctable::{DocId, DocTable};
-use crate::memindex::Position;
+use crate::index::doctable::{DocId, DocTable};
+use crate::index::memindex::Position;
 use crate::segment::format::{SegmentDocs, SegmentTerms, TermEntry, TermPostings};
 use crate::segment::store::SegmentStore;
 
@@ -103,8 +103,8 @@ impl SegmentReader {
 #[cfg(test)]
 mod tests {
 
-    use crate::doctable::DocTable;
-    use crate::memindex::InvertedIndex;
+    use crate::index::doctable::DocTable;
+    use crate::index::memindex::InvertedIndex;
     use crate::segment::format::{Manifest, Segment};
     use crate::segment::reader::{SegmentReader, SegmentReaderCache};
     use crate::segment::store::SegmentStore;

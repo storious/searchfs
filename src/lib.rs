@@ -1,10 +1,6 @@
-pub mod cleaner;
 pub mod cmd;
-pub mod doctable;
 pub mod engine;
-pub mod filecrawler;
-pub mod fileparser;
-pub mod memindex;
+pub mod index;
 pub mod query;
 pub mod segment;
 pub mod snapshot;

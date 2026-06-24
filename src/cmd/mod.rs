@@ -1,6 +1,5 @@
 pub mod cli;
 pub mod commands;
-pub mod usage;
 
 use crate::cmd::cli::{Cli, Command};
 use clap::Parser;

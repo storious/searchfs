@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use crate::doctable::{DocId, DocTable};
-use crate::memindex::{InvertedIndex, Position};
+use crate::index::doctable::{DocId, DocTable};
+use crate::index::memindex::{InvertedIndex, Position};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Segment {

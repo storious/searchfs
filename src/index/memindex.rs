@@ -1,4 +1,4 @@
-use crate::doctable::DocId;
+use crate::index::doctable::DocId;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
