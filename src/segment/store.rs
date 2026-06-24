@@ -228,6 +228,7 @@ impl SegmentStore {
 
     pub fn merge_all_segments(&self) -> io::Result<String> {
         let manifest = self.load_manifest()?;
+        let old_segments = manifest.segments.clone();
 
         if manifest.segments.is_empty() {
             return Err(io::Error::new(
@@ -258,6 +259,16 @@ impl SegmentStore {
         };
 
         self.save_manifest(&new_manifest)?;
+
+        for old_id in old_segments {
+            if old_id != new_id {
+                let old_dir = self.segment_dir(&old_id);
+
+                if old_dir.exists() {
+                    fs::remove_dir_all(old_dir)?;
+                }
+            }
+        }
 
         Ok(new_id)
     }
@@ -419,5 +430,8 @@ mod tests {
         let paths: Vec<_> = results.iter().map(|r| r.path.as_str()).collect();
 
         assert_eq!(paths, vec!["a.txt", "b.txt"]);
+        assert!(!store.segment_dir("seg_000001").exists());
+        assert!(!store.segment_dir("seg_000002").exists());
+        assert!(store.segment_dir("seg_000003").exists());
     }
 }

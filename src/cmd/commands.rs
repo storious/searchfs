@@ -264,6 +264,12 @@ pub(crate) fn run_inspect_segments(index_dir: &str) -> io::Result<()> {
 
         let elapsed = start.elapsed();
 
+        let avg_doc_len = if meta.doc_count == 0 {
+            0.0
+        } else {
+            meta.position_count as f64 / meta.doc_count as f64
+        };
+
         total_docs += meta.doc_count;
         total_terms += meta.term_count;
         total_postings += meta.posting_count;
@@ -276,7 +282,14 @@ pub(crate) fn run_inspect_segments(index_dir: &str) -> io::Result<()> {
         println!("  postings={}", meta.posting_count);
         println!("  positions={}", meta.position_count);
         println!("  load_time={elapsed:.2?}");
+        println!("  avg_doc_len={avg_doc_len:.2}");
     }
+
+    let avg_doc_len = if total_docs == 0 {
+        0.0
+    } else {
+        total_positions as f64 / total_docs as f64
+    };
 
     println!();
     println!("total");
@@ -284,6 +297,6 @@ pub(crate) fn run_inspect_segments(index_dir: &str) -> io::Result<()> {
     println!("  terms={total_terms}");
     println!("  postings={total_postings}");
     println!("  positions={total_positions}");
-
+    println!("  avg_doc_len={avg_doc_len:.2}");
     Ok(())
 }
