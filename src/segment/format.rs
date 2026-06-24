@@ -4,6 +4,7 @@ use crate::index::doctable::{DocId, DocTable};
 use crate::index::memindex::{InvertedIndex, Position};
 
 pub const MANIFEST_VERSION: u32 = 1;
+pub const SEGMENT_META_VERSION: u32 = 1;
 pub const SEGMENT_TERMS_VERSION: u32 = 1;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -41,6 +42,16 @@ pub struct SegmentTerms {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TermPostings {
     pub docs: Vec<(DocId, Vec<Position>)>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SegmentMeta {
+    pub version: u32,
+    pub id: String,
+    pub doc_count: usize,
+    pub term_count: usize,
+    pub posting_count: usize,
+    pub position_count: usize,
 }
 
 pub fn next_segment_id(manifest: &Manifest) -> String {

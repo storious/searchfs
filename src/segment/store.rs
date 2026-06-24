@@ -1,6 +1,6 @@
 use crate::segment::format::{
-    MANIFEST_VERSION, Manifest, SEGMENT_TERMS_VERSION, Segment, SegmentDocs, SegmentTerms,
-    TermEntry, TermPostings, next_segment_id,
+    MANIFEST_VERSION, Manifest, SEGMENT_META_VERSION, SEGMENT_TERMS_VERSION, Segment, SegmentDocs,
+    SegmentMeta, SegmentTerms, TermEntry, TermPostings, next_segment_id,
 };
 use std::fs;
 use std::io::{self, Read, Seek, SeekFrom, Write};
@@ -39,7 +39,18 @@ impl SegmentStore {
         let mut postings_file = fs::File::create(self.segment_postings_path(&segment.id))?;
         let mut offset = 0u64;
 
+        let mut term_count = 0usize;
+        let mut posting_count = 0usize;
+        let mut position_count = 0usize;
+
         for (term, postings) in segment.index.postings_iter() {
+            term_count += 1;
+            posting_count += postings.len();
+            position_count += postings
+                .values()
+                .map(|positions| positions.len())
+                .sum::<usize>();
+
             let docs: Vec<_> = postings
                 .iter()
                 .map(|(&doc_id, positions)| (doc_id, positions.clone()))
@@ -66,10 +77,23 @@ impl SegmentStore {
             version: SEGMENT_TERMS_VERSION,
             terms: entries,
         };
+        let meta = SegmentMeta {
+            version: SEGMENT_META_VERSION,
+            id: segment.id.clone(),
+            doc_count: segment.doctable.len(),
+            term_count,
+            posting_count,
+            position_count,
+        };
 
         fs::write(
             self.segment_terms_path(&segment.id),
             bincode::serialize(&terms).expect("serialize terms"),
+        )?;
+
+        fs::write(
+            self.segment_meta_path(&segment.id),
+            bincode::serialize(&meta).expect("serialize segment meta"),
         )?;
 
         Ok(())
@@ -105,6 +129,20 @@ impl SegmentStore {
             doctable: docs.doctable,
             index,
         })
+    }
+
+    pub fn load_segment_meta(&self, id: &str) -> io::Result<SegmentMeta> {
+        let bytes = fs::read(self.segment_meta_path(id))?;
+        let meta: SegmentMeta = bincode::deserialize(&bytes).expect("deserialize segment meta");
+
+        if meta.version != SEGMENT_META_VERSION {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("unsupported segment meta version: {}", meta.version),
+            ));
+        }
+
+        Ok(meta)
     }
 
     pub fn save_manifest(&self, manifest: &Manifest) -> std::io::Result<()> {
@@ -181,6 +219,10 @@ impl SegmentStore {
         self.save_manifest(&new_manifest)?;
 
         Ok(new_id)
+    }
+
+    fn segment_meta_path(&self, id: &str) -> PathBuf {
+        self.segment_dir(id).join("meta.bin")
     }
 }
 

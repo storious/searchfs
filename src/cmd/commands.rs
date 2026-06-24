@@ -244,3 +244,46 @@ pub(crate) fn run_merge_segments(index_dir: &str) -> io::Result<()> {
 
     Ok(())
 }
+
+pub(crate) fn run_inspect_segments(index_dir: &str) -> io::Result<()> {
+    let store = SegmentStore::new(index_dir);
+
+    let manifest = store.load_manifest()?;
+
+    let mut total_docs = 0;
+    let mut total_terms = 0;
+    let mut total_postings = 0;
+    let mut total_positions = 0;
+
+    println!("segments={}", manifest.segments.len());
+
+    for segment_id in &manifest.segments {
+        let start = Instant::now();
+
+        let meta = store.load_segment_meta(segment_id)?;
+
+        let elapsed = start.elapsed();
+
+        total_docs += meta.doc_count;
+        total_terms += meta.term_count;
+        total_postings += meta.posting_count;
+        total_positions += meta.position_count;
+
+        println!();
+        println!("{segment_id}");
+        println!("  docs={}", meta.doc_count);
+        println!("  terms={}", meta.term_count);
+        println!("  postings={}", meta.posting_count);
+        println!("  positions={}", meta.position_count);
+        println!("  load_time={elapsed:.2?}");
+    }
+
+    println!();
+    println!("total");
+    println!("  docs={total_docs}");
+    println!("  terms={total_terms}");
+    println!("  postings={total_postings}");
+    println!("  positions={total_positions}");
+
+    Ok(())
+}

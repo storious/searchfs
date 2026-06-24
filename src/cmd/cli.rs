@@ -51,6 +51,9 @@ pub enum Command {
 
     /// Merge all segments into one compacted segment.
     MergeSegments { index_dir: String },
+
+    /// Inspect segment metadata and statistics
+    InspectSegments { index_dir: String },
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
