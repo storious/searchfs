@@ -203,6 +203,14 @@ impl<'a> QueryProcessor<'a> {
     }
 }
 
+pub fn parse_query_mode(query: &str, default: QueryMode) -> (&str, QueryMode) {
+    if query.starts_with('"') && query.ends_with('"') {
+        (query.trim_matches('"'), QueryMode::Phrase)
+    } else {
+        (query, default)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

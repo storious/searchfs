@@ -1,9 +1,9 @@
-use std::io;
+use std::io::{self, Write};
 use std::path::Path;
 use std::time::Instant;
 
 use crate::engine::SearchEngine;
-use crate::query::QueryMode;
+use crate::query::{QueryMode, parse_query_mode};
 use crate::segment::format::{Manifest, next_segment_id};
 use crate::segment::reader::SegmentReaderCache;
 use crate::segment::search::SegmentSearcher;
@@ -47,13 +47,7 @@ pub(crate) fn run_search(
     let engine = SearchEngine::from_snapshot(snapshot);
     let load_elapsed = load_start.elapsed();
 
-    let mode = if query.starts_with('"') && query.ends_with('"') {
-        QueryMode::Phrase
-    } else {
-        mode_arg
-    };
-
-    let query = query.trim_matches('"');
+    let (query, mode) = parse_query_mode(query, mode_arg);
 
     let search_start = Instant::now();
     let results = engine.search(query, mode);
@@ -128,11 +122,7 @@ pub(crate) fn run_search_segments(
 ) -> io::Result<()> {
     let store = SegmentStore::new(index_dir);
 
-    let mode = if query.starts_with('"') && query.ends_with('"') {
-        QueryMode::Phrase
-    } else {
-        mode_arg
-    };
+    let (query, mode) = parse_query_mode(query, mode_arg);
 
     let terms: Vec<String> = crate::index::parser::tokenize(query)
         .into_iter()
@@ -207,6 +197,90 @@ pub(crate) fn run_update_segment(index_dir: &str, docs: &str) -> io::Result<()> 
     store.save_manifest(&manifest)?;
 
     eprintln!("added segment={segment_id}");
+
+    Ok(())
+}
+
+pub(crate) fn run_repl(index_dir: &str) -> io::Result<()> {
+    let store = SegmentStore::new(index_dir);
+
+    let load_start = Instant::now();
+    let cache = SegmentReaderCache::open(&store)?;
+    let load_elapsed = load_start.elapsed();
+
+    eprintln!(
+        "loaded segments={} load_time={:.2?}",
+        cache.readers().len(),
+        load_elapsed,
+    );
+
+    eprintln!("type a query, or :quit to exit");
+
+    let stdin = io::stdin();
+    let mut line = String::new();
+
+    loop {
+        print!("searchfs> ");
+        io::stdout().flush()?;
+
+        line.clear();
+        let n = stdin.read_line(&mut line)?;
+
+        if n == 0 {
+            break;
+        }
+
+        let query = line.trim();
+
+        if query.is_empty() {
+            continue;
+        }
+
+        if query == ":quit" || query == ":q" {
+            break;
+        }
+
+        let (query, mode) = parse_query_mode(query, QueryMode::All);
+
+        let terms: Vec<String> = crate::index::parser::tokenize(query)
+            .into_iter()
+            .map(|(term, _)| term)
+            .collect();
+
+        let mut all_results = Vec::new();
+
+        let start = Instant::now();
+
+        for reader in cache.readers() {
+            let searcher = SegmentSearcher::new(reader);
+
+            match mode {
+                QueryMode::All => {
+                    all_results.extend(searcher.search_all(&terms)?);
+                }
+                QueryMode::Any => {
+                    all_results.extend(searcher.search_any(&terms)?);
+                }
+                QueryMode::Phrase => {
+                    all_results.extend(searcher.search_phrase(&terms)?);
+                }
+            }
+        }
+
+        let elapsed = start.elapsed();
+
+        all_results.sort_by(|a, b| {
+            b.score
+                .total_cmp(&a.score)
+                .then_with(|| a.path.cmp(&b.path))
+        });
+
+        eprintln!("search_time={elapsed:.2?}");
+
+        for result in all_results.into_iter().take(10) {
+            println!("{} score={}", result.path, result.score);
+        }
+    }
 
     Ok(())
 }

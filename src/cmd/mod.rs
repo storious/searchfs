@@ -26,5 +26,6 @@ pub fn run() -> std::io::Result<()> {
             limit,
             mode,
         } => commands::run_search_segments(&index_dir, &query, limit, mode.into()),
+        Command::Repl { index_dir } => commands::run_repl(&index_dir),
     }
 }

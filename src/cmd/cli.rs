@@ -28,6 +28,9 @@ pub enum Command {
         mode: CliQueryMode,
     },
 
+    /// Start an interactive REPL over a segment index.
+    Repl { index_dir: String },
+
     /// Build a segment index.
     BuildSegment { docs: String, index_dir: String },
 
