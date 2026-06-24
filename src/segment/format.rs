@@ -6,6 +6,7 @@ use crate::index::memindex::{InvertedIndex, Position};
 pub const MANIFEST_VERSION: u32 = 1;
 pub const SEGMENT_META_VERSION: u32 = 1;
 pub const SEGMENT_TERMS_VERSION: u32 = 1;
+pub const SEGMENT_DOC_META_VERSION: u32 = 1;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Segment {
@@ -52,6 +53,18 @@ pub struct SegmentMeta {
     pub term_count: usize,
     pub posting_count: usize,
     pub position_count: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DocMetaEntry {
+    pub doc_id: DocId,
+    pub doc_len: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SegmentDocMeta {
+    pub version: u32,
+    pub docs: Vec<DocMetaEntry>,
 }
 
 pub fn next_segment_id(manifest: &Manifest) -> String {

@@ -1,12 +1,15 @@
 use crate::segment::format::{
-    MANIFEST_VERSION, Manifest, SEGMENT_META_VERSION, SEGMENT_TERMS_VERSION, Segment, SegmentDocs,
-    SegmentMeta, SegmentTerms, TermEntry, TermPostings, next_segment_id,
+    DocMetaEntry, MANIFEST_VERSION, Manifest, SEGMENT_DOC_META_VERSION, SEGMENT_META_VERSION,
+    SEGMENT_TERMS_VERSION, Segment, SegmentDocMeta, SegmentDocs, SegmentMeta, SegmentTerms,
+    TermEntry, TermPostings, next_segment_id,
 };
+use std::collections::HashMap;
 use std::fs;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 
 use crate::engine::SearchEngine;
+use crate::index::doctable::DocId;
 use crate::index::memindex::InvertedIndex;
 
 pub struct SegmentStore {
@@ -34,6 +37,7 @@ impl SegmentStore {
             self.segment_docs_path(&segment.id),
             bincode::serialize(&docs).expect("serialize docs"),
         )?;
+        let mut doc_lens: HashMap<DocId, usize> = HashMap::new();
 
         let mut entries = Vec::new();
         let mut postings_file = fs::File::create(self.segment_postings_path(&segment.id))?;
@@ -50,6 +54,10 @@ impl SegmentStore {
                 .values()
                 .map(|positions| positions.len())
                 .sum::<usize>();
+
+            for (&doc_id, positions) in postings {
+                *doc_lens.entry(doc_id).or_insert(0) += positions.len();
+            }
 
             let docs: Vec<_> = postings
                 .iter()
@@ -85,6 +93,23 @@ impl SegmentStore {
             posting_count,
             position_count,
         };
+
+        let mut docmeta_docs: Vec<_> = doc_lens
+            .into_iter()
+            .map(|(doc_id, doc_len)| DocMetaEntry { doc_id, doc_len })
+            .collect();
+
+        docmeta_docs.sort_by_key(|entry| entry.doc_id);
+
+        let docmeta = SegmentDocMeta {
+            version: SEGMENT_DOC_META_VERSION,
+            docs: docmeta_docs,
+        };
+
+        fs::write(
+            self.segment_docmeta_path(&segment.id),
+            bincode::serialize(&docmeta).expect("serialize segment doc meta"),
+        )?;
 
         fs::write(
             self.segment_terms_path(&segment.id),
@@ -161,6 +186,22 @@ impl SegmentStore {
         Ok(manifest)
     }
 
+    pub fn load_segment_docmeta(&self, id: &str) -> io::Result<SegmentDocMeta> {
+        let bytes = fs::read(self.segment_docmeta_path(id))?;
+
+        let docmeta: SegmentDocMeta =
+            bincode::deserialize(&bytes).expect("deserialize segment doc meta");
+
+        if docmeta.version != SEGMENT_DOC_META_VERSION {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("unsupported segment doc meta version: {}", docmeta.version),
+            ));
+        }
+
+        Ok(docmeta)
+    }
+
     pub(crate) fn segments_dir(&self) -> PathBuf {
         self.root.join("segments")
     }
@@ -223,6 +264,10 @@ impl SegmentStore {
 
     fn segment_meta_path(&self, id: &str) -> PathBuf {
         self.segment_dir(id).join("meta.bin")
+    }
+
+    fn segment_docmeta_path(&self, id: &str) -> PathBuf {
+        self.segment_dir(id).join("docmeta.bin")
     }
 }
 

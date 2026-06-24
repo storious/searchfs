@@ -42,7 +42,7 @@ impl<'a> SegmentSearcher<'a> {
         let mut results = Vec::new();
 
         for (&doc_id, first_positions) in &first_postings {
-            let mut score = self.bm25(first_term, first_positions.len());
+            let mut score = self.bm25(first_term, doc_id, first_positions.len());
             let mut matched = true;
 
             for (term, postings) in &other_postings {
@@ -51,7 +51,7 @@ impl<'a> SegmentSearcher<'a> {
                     break;
                 };
 
-                score += self.bm25(term, positions.len());
+                score += self.bm25(term, doc_id, positions.len());
             }
 
             if !matched {
@@ -86,7 +86,7 @@ impl<'a> SegmentSearcher<'a> {
                     continue;
                 };
 
-                let score = self.bm25(term, positions.len());
+                let score = self.bm25(term, doc_id, positions.len());
 
                 merged
                     .entry(doc_id)
@@ -171,7 +171,7 @@ impl<'a> SegmentSearcher<'a> {
         });
     }
 
-    fn bm25(&self, term: &str, tf: usize) -> f64 {
+    fn bm25(&self, term: &str, doc_id: DocId, tf: usize) -> f64 {
         let n = self.reader.doc_count() as f64;
         let df = self.reader.document_frequency(term) as f64;
 
@@ -180,11 +180,21 @@ impl<'a> SegmentSearcher<'a> {
         }
 
         let k1 = 1.2;
+        let b = 0.75;
+
+        let tf = tf as f64;
+        let doc_len = self.reader.doc_len(doc_id) as f64;
+        let avg_doc_len = self.reader.avg_doc_len();
+
+        if avg_doc_len == 0.0 {
+            return 0.0;
+        }
 
         let idf = ((n - df + 0.5) / (df + 0.5) + 1.0).ln();
-        let tf = tf as f64;
 
-        idf * ((tf * (k1 + 1.0)) / (tf + k1))
+        let denom = tf + k1 * (1.0 - b + b * doc_len / avg_doc_len);
+
+        idf * (tf * (k1 + 1.0)) / denom
     }
 }
 
@@ -261,7 +271,8 @@ mod tests {
         let terms = vec!["memory".to_string(), "python".to_string()];
         let results = SegmentSearcher::new(&reader).search_any(&terms).unwrap();
 
-        let paths: Vec<_> = results.iter().map(|r| r.path.as_str()).collect();
+        let mut paths: Vec<_> = results.iter().map(|r| r.path.as_str()).collect();
+        paths.sort();
 
         assert_eq!(paths, vec!["a.txt", "c.txt"]);
     }
@@ -339,8 +350,8 @@ mod tests {
 
         let searcher = SegmentSearcher::new(&reader);
 
-        let score1 = searcher.bm25("rust", 1);
-        let score100 = searcher.bm25("rust", 100);
+        let score1 = searcher.bm25("rust", doc1, 1);
+        let score100 = searcher.bm25("rust", doc2, 100);
 
         assert!(score100 > score1);
 

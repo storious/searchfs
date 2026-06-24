@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use crate::index::doctable::{DocId, DocTable};
 use crate::index::memindex::Position;
-use crate::segment::format::{SegmentDocs, SegmentTerms, TermEntry, TermPostings};
+use crate::segment::format::{SegmentDocs, SegmentMeta, SegmentTerms, TermEntry, TermPostings};
 use crate::segment::store::SegmentStore;
 
 pub struct SegmentReader {
@@ -13,6 +13,8 @@ pub struct SegmentReader {
     docs: DocTable,
     terms: HashMap<String, TermEntry>,
     postings_path: PathBuf,
+    meta: SegmentMeta,
+    doc_lens: HashMap<DocId, usize>,
 }
 
 pub struct SegmentReaderCache {
@@ -52,11 +54,23 @@ impl SegmentReader {
             .map(|entry| (entry.term.clone(), entry))
             .collect();
 
+        let meta = store.load_segment_meta(id)?;
+
+        let docmeta = store.load_segment_docmeta(id)?;
+
+        let doc_lens = docmeta
+            .docs
+            .into_iter()
+            .map(|entry| (entry.doc_id, entry.doc_len))
+            .collect();
+
         Ok(Self {
             id: id.to_string(),
             docs: docs.doctable,
             terms,
             postings_path: store.segment_postings_path(id),
+            meta,
+            doc_lens,
         })
     }
 
@@ -101,6 +115,22 @@ impl SegmentReader {
 
     pub fn term_df(&self, term: &str) -> Option<usize> {
         self.terms.get(term).map(|entry| entry.doc_freq)
+    }
+
+    pub fn position_count(&self) -> usize {
+        self.meta.position_count
+    }
+
+    pub fn doc_len(&self, doc_id: DocId) -> usize {
+        self.doc_lens.get(&doc_id).copied().unwrap_or(0)
+    }
+
+    pub fn avg_doc_len(&self) -> f64 {
+        if self.meta.doc_count == 0 {
+            return 0.0;
+        }
+
+        self.meta.position_count as f64 / self.meta.doc_count as f64
     }
 }
 
