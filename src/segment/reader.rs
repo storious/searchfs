@@ -109,7 +109,7 @@ mod tests {
 
     use crate::index::doctable::DocTable;
     use crate::index::memindex::InvertedIndex;
-    use crate::segment::format::{Manifest, Segment};
+    use crate::segment::format::{MANIFEST_VERSION, Manifest, Segment};
     use crate::segment::reader::{SegmentReader, SegmentReaderCache};
     use crate::segment::store::SegmentStore;
 
@@ -157,6 +157,7 @@ mod tests {
         };
         store.save_segment(&segment).unwrap();
         let manifest = Manifest {
+            version: MANIFEST_VERSION,
             segments: vec!["seg_000001".to_string()],
         };
         store.save_manifest(&manifest).unwrap();

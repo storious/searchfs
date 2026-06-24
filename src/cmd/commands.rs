@@ -5,7 +5,7 @@ use std::time::Instant;
 use crate::cmd::utils::{print_results, search_with_cache};
 use crate::engine::SearchEngine;
 use crate::query::{QueryMode, parse_query_mode};
-use crate::segment::format::{Manifest, next_segment_id};
+use crate::segment::format::{MANIFEST_VERSION, Manifest, next_segment_id};
 use crate::segment::reader::SegmentReaderCache;
 use crate::segment::store::SegmentStore;
 use crate::snapshot;
@@ -97,6 +97,12 @@ pub(crate) fn run_build_segment(docs: &str, index_dir: &str) -> io::Result<()> {
         elapsed,
     );
 
+    let index_path = Path::new(index_dir);
+
+    if index_path.exists() {
+        std::fs::remove_dir_all(index_path)?;
+    }
+
     let store = SegmentStore::new(index_dir);
     let segment_id = "seg_000001";
 
@@ -104,6 +110,7 @@ pub(crate) fn run_build_segment(docs: &str, index_dir: &str) -> io::Result<()> {
     store.save_segment(&segment)?;
 
     let manifest = Manifest {
+        version: MANIFEST_VERSION,
         segments: vec![segment_id.to_string()],
     };
 
@@ -201,7 +208,8 @@ pub(crate) fn run_repl(index_dir: &str) -> io::Result<()> {
             break;
         }
 
-        let query = line.trim();
+        let query = line.trim().replace('：', ":");
+        let query = query.trim();
 
         if query.is_empty() {
             continue;

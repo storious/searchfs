@@ -1,5 +1,6 @@
 use crate::segment::format::{
-    Manifest, Segment, SegmentDocs, SegmentTerms, TermEntry, TermPostings, next_segment_id,
+    MANIFEST_VERSION, Manifest, SEGMENT_TERMS_VERSION, Segment, SegmentDocs, SegmentTerms,
+    TermEntry, TermPostings, next_segment_id,
 };
 use std::fs;
 use std::io::{self, Read, Seek, SeekFrom, Write};
@@ -61,7 +62,10 @@ impl SegmentStore {
             offset += bytes.len() as u64;
         }
 
-        let terms = SegmentTerms { terms: entries };
+        let terms = SegmentTerms {
+            version: SEGMENT_TERMS_VERSION,
+            terms: entries,
+        };
 
         fs::write(
             self.segment_terms_path(&segment.id),
@@ -170,6 +174,7 @@ impl SegmentStore {
         self.save_segment(&segment)?;
 
         let new_manifest = Manifest {
+            version: MANIFEST_VERSION,
             segments: vec![new_id.clone()],
         };
 
@@ -183,7 +188,7 @@ impl SegmentStore {
 mod tests {
     use crate::index::doctable::DocTable;
     use crate::index::memindex::InvertedIndex;
-    use crate::segment::format::{Manifest, Segment};
+    use crate::segment::format::{MANIFEST_VERSION, Manifest, Segment};
     use crate::segment::reader::SegmentReaderCache;
     use crate::segment::search::SegmentSearcher;
     use crate::segment::store::SegmentStore;
@@ -194,6 +199,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let store = SegmentStore::new(dir.path());
         let manifest = Manifest {
+            version: MANIFEST_VERSION,
             segments: vec!["seg_000001".to_string()],
         };
         store.save_manifest(&manifest).unwrap();
@@ -256,6 +262,7 @@ mod tests {
 
         store
             .save_manifest(&Manifest {
+                version: MANIFEST_VERSION,
                 segments: vec!["seg_000001".to_string(), "seg_000002".to_string()],
             })
             .unwrap();
@@ -309,6 +316,7 @@ mod tests {
 
         store
             .save_manifest(&Manifest {
+                version: MANIFEST_VERSION,
                 segments: vec!["seg_000001".to_string(), "seg_000002".to_string()],
             })
             .unwrap();

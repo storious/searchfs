@@ -3,6 +3,9 @@ use serde::{Deserialize, Serialize};
 use crate::index::doctable::{DocId, DocTable};
 use crate::index::memindex::{InvertedIndex, Position};
 
+pub const MANIFEST_VERSION: u32 = 1;
+pub const SEGMENT_TERMS_VERSION: u32 = 1;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Segment {
     pub id: String,
@@ -12,6 +15,7 @@ pub struct Segment {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Manifest {
+    pub version: u32,
     pub segments: Vec<String>,
 }
 
@@ -30,6 +34,7 @@ pub struct TermEntry {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SegmentTerms {
+    pub version: u32,
     pub terms: Vec<TermEntry>,
 }
 
@@ -49,6 +54,7 @@ mod tests {
     #[test]
     fn next_segment_id_uses_manifest_len() {
         let manifest = Manifest {
+            version: MANIFEST_VERSION,
             segments: vec!["seg_000001".to_string(), "seg_000002".to_string()],
         };
 
