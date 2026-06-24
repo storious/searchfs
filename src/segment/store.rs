@@ -43,6 +43,8 @@ impl SegmentStore {
                 .map(|(&doc_id, positions)| (doc_id, positions.clone()))
                 .collect();
 
+            let doc_freq = docs.len();
+
             let bytes =
                 bincode::serialize(&TermPostings { docs }).expect("serialize term postings");
 
@@ -52,6 +54,7 @@ impl SegmentStore {
                 term: term.clone(),
                 offset,
                 len: bytes.len() as u64,
+                doc_freq,
             });
 
             offset += bytes.len() as u64;

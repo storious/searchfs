@@ -98,6 +98,10 @@ impl SegmentReader {
             })
             .unwrap_or(0)
     }
+
+    pub fn term_df(&self, term: &str) -> Option<usize> {
+        self.terms.get(term).map(|entry| entry.doc_freq)
+    }
 }
 
 #[cfg(test)]

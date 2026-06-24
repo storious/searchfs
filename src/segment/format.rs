@@ -25,6 +25,7 @@ pub struct TermEntry {
     pub term: String,
     pub offset: u64,
     pub len: u64,
+    pub doc_freq: usize,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

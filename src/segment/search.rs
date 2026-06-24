@@ -19,28 +19,39 @@ impl<'a> SegmentSearcher<'a> {
             return Ok(Vec::new());
         }
 
-        let Some(first_postings) = self.reader.lookup(&terms[0])? else {
+        let mut ordered_terms: Vec<&String> = terms.iter().collect();
+
+        ordered_terms.sort_by_key(|term| self.reader.term_df(term).unwrap_or(usize::MAX));
+
+        let first_term = ordered_terms[0];
+
+        let Some(first_postings) = self.reader.lookup(first_term)? else {
             return Ok(Vec::new());
         };
 
+        let mut other_postings = Vec::new();
+
+        for term in ordered_terms.iter().skip(1) {
+            let Some(postings) = self.reader.lookup(term)? else {
+                return Ok(Vec::new());
+            };
+
+            other_postings.push((*term, postings));
+        }
+
         let mut results = Vec::new();
 
-        for (&doc_id, positions) in &first_postings {
-            let mut score = self.tf_idf(&terms[0], positions.len());
+        for (&doc_id, first_positions) in &first_postings {
+            let mut score = self.tf_idf(first_term, first_positions.len());
             let mut matched = true;
 
-            for term in &terms[1..] {
-                let Some(postings) = self.reader.lookup(term)? else {
+            for (term, postings) in &other_postings {
+                let Some(positions) = postings.get(&doc_id) else {
                     matched = false;
                     break;
                 };
 
-                let Some(term_positions) = postings.get(&doc_id) else {
-                    matched = false;
-                    break;
-                };
-
-                score += self.tf_idf(term, term_positions.len());
+                score += self.tf_idf(term, positions.len());
             }
 
             if !matched {
