@@ -1,6 +1,6 @@
 use crate::query::QueryMode;
 use crate::query::{SearchResult, TopKCollector};
-use crate::segment::reader::SegmentReaderCache;
+use crate::segment::reader::{SegmentReader, SegmentReaderCache};
 use crate::segment::search::SegmentSearcher;
 
 use std::io;
@@ -110,23 +110,39 @@ pub(crate) fn search_with_cache(
         .map(|(term, _)| term)
         .collect();
 
+    search_reader_cache(cache, &terms, mode, limit)
+}
+
+fn search_reader_cache(
+    cache: &SegmentReaderCache,
+    terms: &[String],
+    mode: QueryMode,
+    limit: usize,
+) -> io::Result<Vec<SearchResult>> {
     let mut collector = TopKCollector::new(limit);
 
     for reader in cache.readers() {
-        let searcher = SegmentSearcher::new(reader);
-
-        let results = match mode {
-            QueryMode::All => searcher.search_all(&terms, limit)?,
-            QueryMode::Any => searcher.search_any(&terms, limit)?,
-            QueryMode::Phrase => searcher.search_phrase(&terms, limit)?,
-        };
-
-        for result in results {
+        for result in search_segment(reader, terms, mode, limit)? {
             collector.collect(result);
         }
     }
 
     Ok(collector.into_sorted_vec())
+}
+
+fn search_segment(
+    reader: &SegmentReader,
+    terms: &[String],
+    mode: QueryMode,
+    limit: usize,
+) -> io::Result<Vec<SearchResult>> {
+    let searcher = SegmentSearcher::new(reader);
+
+    match mode {
+        QueryMode::All => searcher.search_all(terms, limit),
+        QueryMode::Any => searcher.search_any(terms, limit),
+        QueryMode::Phrase => searcher.search_phrase(terms, limit),
+    }
 }
 
 pub(crate) fn print_results(results: Vec<SearchResult>, limit: usize) {
@@ -177,4 +193,109 @@ pub(crate) fn print_repl_stats(cache: &SegmentReaderCache, mode: QueryMode, limi
     eprintln!("avg_doc_len={avg_doc_len:.2}");
     eprintln!("mode={}", mode.as_str());
     eprintln!("limit={limit}");
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cmd::utils::search_reader_cache;
+    use crate::index::doctable::DocTable;
+    use crate::index::memindex::InvertedIndex;
+    use crate::query::QueryMode;
+    use crate::segment::format::{MANIFEST_VERSION, Manifest, Segment};
+    use crate::segment::store::SegmentStore;
+    use tempfile::tempdir;
+
+    #[test]
+    fn search_reader_cache_merges_topk_across_segments() {
+        let dir = tempdir().unwrap();
+        let store = SegmentStore::new(dir.path());
+
+        let mut doctable1 = DocTable::new();
+        let doc1 = doctable1.add_document("a.txt".to_string());
+
+        let mut index1 = InvertedIndex::new();
+        index1.add_document_tokens(doc1, vec![("rust".to_string(), 0)]);
+
+        let segment1 = Segment {
+            id: "seg_000001".to_string(),
+            doctable: doctable1,
+            index: index1,
+        };
+
+        let mut doctable2 = DocTable::new();
+        let doc2 = doctable2.add_document("b.txt".to_string());
+
+        let mut index2 = InvertedIndex::new();
+        index2.add_document_tokens(doc2, vec![("rust".to_string(), 0)]);
+
+        let segment2 = Segment {
+            id: "seg_000002".to_string(),
+            doctable: doctable2,
+            index: index2,
+        };
+
+        store.save_segment(&segment1).unwrap();
+        store.save_segment(&segment2).unwrap();
+
+        store
+            .save_manifest(&Manifest {
+                version: MANIFEST_VERSION,
+                segments: vec!["seg_000001".to_string(), "seg_000002".to_string()],
+            })
+            .unwrap();
+
+        let cache = store.open_reader_cache().unwrap();
+
+        let terms = vec!["rust".to_string()];
+
+        let results = search_reader_cache(&cache, &terms, QueryMode::Any, 2).unwrap();
+
+        let mut paths: Vec<_> = results.iter().map(|r| r.path.as_str()).collect();
+        paths.sort();
+
+        assert_eq!(paths, vec!["a.txt", "b.txt"]);
+    }
+
+    #[test]
+    fn search_reader_cache_respects_global_limit() {
+        use crate::index::doctable::DocTable;
+        use crate::index::memindex::InvertedIndex;
+        use crate::query::QueryMode;
+        use crate::segment::format::{MANIFEST_VERSION, Manifest, Segment};
+        use crate::segment::store::SegmentStore;
+        use tempfile::tempdir;
+
+        let dir = tempdir().unwrap();
+        let store = SegmentStore::new(dir.path());
+
+        for (id, path) in [("seg_000001", "a.txt"), ("seg_000002", "b.txt")] {
+            let mut doctable = DocTable::new();
+            let doc = doctable.add_document(path.to_string());
+
+            let mut index = InvertedIndex::new();
+            index.add_document_tokens(doc, vec![("rust".to_string(), 0)]);
+
+            let segment = Segment {
+                id: id.to_string(),
+                doctable,
+                index,
+            };
+
+            store.save_segment(&segment).unwrap();
+        }
+
+        store
+            .save_manifest(&Manifest {
+                version: MANIFEST_VERSION,
+                segments: vec!["seg_000001".to_string(), "seg_000002".to_string()],
+            })
+            .unwrap();
+
+        let cache = store.open_reader_cache().unwrap();
+
+        let results =
+            search_reader_cache(&cache, &["rust".to_string()], QueryMode::Any, 1).unwrap();
+
+        assert_eq!(results.len(), 1);
+    }
 }
