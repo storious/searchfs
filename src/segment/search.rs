@@ -206,6 +206,7 @@ mod tests {
 
     use crate::index::doctable::DocTable;
     use crate::index::memindex::InvertedIndex;
+    use crate::query::CountCollector;
     use crate::segment::format::Segment;
     use crate::segment::reader::SegmentReader;
     use crate::segment::search::SegmentSearcher;
@@ -424,5 +425,41 @@ mod tests {
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].path, "a.txt");
+    }
+
+    #[test]
+    fn search_all_into_collects_all_matches() {
+        let dir = tempdir().unwrap();
+        let store = SegmentStore::new(dir.path());
+
+        let mut doctable = DocTable::new();
+
+        let doc1 = doctable.add_document("a.txt".to_string());
+        let doc2 = doctable.add_document("b.txt".to_string());
+
+        let mut index = InvertedIndex::new();
+
+        index.add_document_tokens(doc1, vec![("rust".to_string(), 0)]);
+        index.add_document_tokens(doc2, vec![("rust".to_string(), 0)]);
+
+        let segment = Segment {
+            id: "seg_000001".to_string(),
+            doctable,
+            index,
+        };
+
+        store.save_segment(&segment).unwrap();
+
+        let reader = SegmentReader::open(&store, "seg_000001").unwrap();
+
+        let searcher = SegmentSearcher::new(&reader);
+
+        let mut collector = CountCollector::new();
+
+        searcher
+            .search_all_into(&["rust".to_string()], &mut collector)
+            .unwrap();
+
+        assert_eq!(collector.count(), 2);
     }
 }

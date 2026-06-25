@@ -121,6 +121,32 @@ impl Collector for TopKCollector {
     }
 }
 
+pub struct CountCollector {
+    count: usize,
+}
+
+impl CountCollector {
+    pub fn new() -> Self {
+        Self { count: 0 }
+    }
+
+    pub fn count(&self) -> usize {
+        self.count
+    }
+}
+
+impl Collector for CountCollector {
+    fn collect(&mut self, _result: SearchResult) {
+        self.count += 1;
+    }
+}
+
+impl Default for CountCollector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Legacy in-memory query processor used by snapshot search.
 pub struct QueryProcessor<'a> {
     index: &'a InvertedIndex,
@@ -487,5 +513,24 @@ mod tests {
         let paths: Vec<_> = results.iter().map(|r| r.path.as_str()).collect();
 
         assert_eq!(paths, vec!["a.txt", "b.txt"]);
+    }
+
+    #[test]
+    fn count_collector_counts_documents() {
+        let mut collector = CountCollector::new();
+
+        collector.collect(SearchResult {
+            doc_id: 1,
+            path: "a.txt".to_string(),
+            score: 1.0,
+        });
+
+        collector.collect(SearchResult {
+            doc_id: 2,
+            path: "b.txt".to_string(),
+            score: 2.0,
+        });
+
+        assert_eq!(collector.count(), 2);
     }
 }
