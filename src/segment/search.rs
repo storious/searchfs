@@ -1,5 +1,5 @@
 use crate::index::doctable::DocId;
-use crate::query::{SearchResult, TopKCollector};
+use crate::query::{Collector, SearchResult, TopKCollector};
 use crate::segment::reader::SegmentReader;
 use crate::segment::scorer::Bm25Scorer;
 
@@ -19,9 +19,13 @@ impl<'a> SegmentSearcher<'a> {
         }
     }
 
-    pub fn search_all_topk(&self, terms: &[String], limit: usize) -> io::Result<Vec<SearchResult>> {
+    pub fn search_all_into<C: Collector>(
+        &self,
+        terms: &[String],
+        collector: &mut C,
+    ) -> io::Result<()> {
         if terms.is_empty() {
-            return Ok(Vec::new());
+            return Ok(());
         }
 
         let mut ordered_terms: Vec<&String> = terms.iter().collect();
@@ -30,20 +34,18 @@ impl<'a> SegmentSearcher<'a> {
         let first_term = ordered_terms[0];
 
         let Some(first_postings) = self.reader.lookup(first_term)? else {
-            return Ok(Vec::new());
+            return Ok(());
         };
 
         let mut other_postings = Vec::new();
 
         for term in ordered_terms.iter().skip(1) {
             let Some(postings) = self.reader.lookup(term)? else {
-                return Ok(Vec::new());
+                return Ok(());
             };
 
             other_postings.push((*term, postings));
         }
-
-        let mut collector = TopKCollector::new(limit);
 
         for (&doc_id, first_positions) in &first_postings {
             let mut score = self.scorer.score(first_term, doc_id, first_positions.len());
@@ -73,10 +75,22 @@ impl<'a> SegmentSearcher<'a> {
             });
         }
 
+        Ok(())
+    }
+
+    pub fn search_all(&self, terms: &[String], limit: usize) -> io::Result<Vec<SearchResult>> {
+        let mut collector = TopKCollector::new(limit);
+
+        self.search_all_into(terms, &mut collector)?;
+
         Ok(collector.into_sorted_vec())
     }
 
-    pub fn search_any_topk(&self, terms: &[String], limit: usize) -> io::Result<Vec<SearchResult>> {
+    pub fn search_any_into<C: Collector>(
+        &self,
+        terms: &[String],
+        collector: &mut C,
+    ) -> io::Result<()> {
         let mut merged: HashMap<DocId, SearchResult> = HashMap::new();
 
         for term in terms {
@@ -103,37 +117,42 @@ impl<'a> SegmentSearcher<'a> {
                     });
             }
         }
-
-        let mut collector = TopKCollector::new(limit);
 
         for result in merged.into_values() {
             collector.collect(result);
         }
 
+        Ok(())
+    }
+
+    pub fn search_any(&self, terms: &[String], limit: usize) -> io::Result<Vec<SearchResult>> {
+        let mut collector = TopKCollector::new(limit);
+
+        self.search_any_into(terms, &mut collector)?;
+
         Ok(collector.into_sorted_vec())
     }
 
-    pub fn search_phrase_topk(
+    pub fn search_phrase_into<C: Collector>(
         &self,
         terms: &[String],
-        limit: usize,
-    ) -> io::Result<Vec<SearchResult>> {
+        collector: &mut C,
+    ) -> io::Result<()> {
         if terms.is_empty() {
-            return Ok(Vec::new());
+            return Ok(());
         }
 
         let mut postings_by_term = Vec::new();
 
         for term in terms {
             let Some(postings) = self.reader.lookup(term)? else {
-                return Ok(Vec::new());
+                return Ok(());
             };
 
             postings_by_term.push(postings);
         }
 
         let first_postings = &postings_by_term[0];
-        let mut collector = TopKCollector::new(limit);
 
         for (&doc_id, first_positions) in first_postings {
             let mut phrase_count = 0;
@@ -170,153 +189,15 @@ impl<'a> SegmentSearcher<'a> {
             });
         }
 
+        Ok(())
+    }
+
+    pub fn search_phrase(&self, terms: &[String], limit: usize) -> io::Result<Vec<SearchResult>> {
+        let mut collector = TopKCollector::new(limit);
+
+        self.search_phrase_into(terms, &mut collector)?;
+
         Ok(collector.into_sorted_vec())
-    }
-
-    pub fn search_all(&self, terms: &[String]) -> io::Result<Vec<SearchResult>> {
-        if terms.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let mut ordered_terms: Vec<&String> = terms.iter().collect();
-
-        ordered_terms.sort_by_key(|term| self.reader.term_df(term).unwrap_or(usize::MAX));
-
-        let first_term = ordered_terms[0];
-
-        let Some(first_postings) = self.reader.lookup(first_term)? else {
-            return Ok(Vec::new());
-        };
-
-        let mut other_postings = Vec::new();
-
-        for term in ordered_terms.iter().skip(1) {
-            let Some(postings) = self.reader.lookup(term)? else {
-                return Ok(Vec::new());
-            };
-
-            other_postings.push((*term, postings));
-        }
-
-        let mut results = Vec::new();
-
-        for (&doc_id, first_positions) in &first_postings {
-            let mut score = self.scorer.score(first_term, doc_id, first_positions.len());
-            let mut matched = true;
-
-            for (term, postings) in &other_postings {
-                let Some(positions) = postings.get(&doc_id) else {
-                    matched = false;
-                    break;
-                };
-
-                score += self.scorer.score(term, doc_id, positions.len());
-            }
-
-            if !matched {
-                continue;
-            }
-
-            let Some(path) = self.reader.doc_path(doc_id) else {
-                continue;
-            };
-
-            results.push(SearchResult {
-                doc_id,
-                path: path.to_string(),
-                score,
-            });
-        }
-
-        Ok(results)
-    }
-
-    pub fn search_any(&self, terms: &[String]) -> io::Result<Vec<SearchResult>> {
-        let mut merged: HashMap<DocId, SearchResult> = HashMap::new();
-
-        for term in terms {
-            let Some(postings) = self.reader.lookup(term)? else {
-                continue;
-            };
-
-            for (&doc_id, positions) in &postings {
-                let Some(path) = self.reader.doc_path(doc_id) else {
-                    continue;
-                };
-
-                let score = self.scorer.score(term, doc_id, positions.len());
-
-                merged
-                    .entry(doc_id)
-                    .and_modify(|result| {
-                        result.score += score;
-                    })
-                    .or_insert_with(|| SearchResult {
-                        doc_id,
-                        path: path.to_string(),
-                        score,
-                    });
-            }
-        }
-
-        let results: Vec<_> = merged.into_values().collect();
-        Ok(results)
-    }
-
-    pub fn search_phrase(&self, terms: &[String]) -> io::Result<Vec<SearchResult>> {
-        if terms.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let mut postings_by_term = Vec::new();
-
-        for term in terms {
-            let Some(postings) = self.reader.lookup(term)? else {
-                return Ok(Vec::new());
-            };
-
-            postings_by_term.push(postings);
-        }
-
-        let first_postings = &postings_by_term[0];
-        let mut results = Vec::new();
-
-        for (&doc_id, first_positions) in first_postings {
-            let mut phrase_count = 0;
-
-            for &start_pos in first_positions {
-                let matched =
-                    postings_by_term
-                        .iter()
-                        .enumerate()
-                        .skip(1)
-                        .all(|(offset, postings)| {
-                            postings.get(&doc_id).is_some_and(|positions| {
-                                positions.contains(&(start_pos + offset as u64))
-                            })
-                        });
-
-                if matched {
-                    phrase_count += 1;
-                }
-            }
-
-            if phrase_count == 0 {
-                continue;
-            }
-
-            let Some(path) = self.reader.doc_path(doc_id) else {
-                continue;
-            };
-
-            results.push(SearchResult {
-                doc_id,
-                path: path.to_string(),
-                score: phrase_count as f64,
-            });
-        }
-
-        Ok(results)
     }
 }
 
@@ -353,7 +234,7 @@ mod tests {
         store.save_segment(&segment).unwrap();
         let reader = SegmentReader::open(&store, "seg_000001").unwrap();
         let results = SegmentSearcher::new(&reader)
-            .search_all(&["rust".to_string(), "memory".to_string()])
+            .search_all(&["rust".to_string(), "memory".to_string()], 1)
             .unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].path, "a.txt");
@@ -391,7 +272,7 @@ mod tests {
         let reader = SegmentReader::open(&store, "seg_000001").unwrap();
 
         let terms = vec!["memory".to_string(), "python".to_string()];
-        let results = SegmentSearcher::new(&reader).search_any(&terms).unwrap();
+        let results = SegmentSearcher::new(&reader).search_any(&terms, 2).unwrap();
 
         let mut paths: Vec<_> = results.iter().map(|r| r.path.as_str()).collect();
         paths.sort();
@@ -432,7 +313,9 @@ mod tests {
         store.save_segment(&segment).unwrap();
         let reader = SegmentReader::open(&store, "seg_000001").unwrap();
         let terms = vec!["white".to_string(), "whale".to_string()];
-        let results = SegmentSearcher::new(&reader).search_phrase(&terms).unwrap();
+        let results = SegmentSearcher::new(&reader)
+            .search_phrase(&terms, 1)
+            .unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].path, "a.txt");
         assert_eq!(results[0].score, 2.0);
@@ -478,5 +361,68 @@ mod tests {
         assert!(score100 > score1);
 
         assert!(score100 < score1 * 20.0);
+    }
+
+    #[test]
+    fn search_all_topk_respects_limit() {
+        let dir = tempdir().unwrap();
+        let store = SegmentStore::new(dir.path());
+
+        let mut doctable = DocTable::new();
+        let doc1 = doctable.add_document("a.txt".to_string());
+        let doc2 = doctable.add_document("b.txt".to_string());
+        let doc3 = doctable.add_document("c.txt".to_string());
+
+        let mut index = InvertedIndex::new();
+
+        index.add_document_tokens(doc1, vec![("rust".to_string(), 0)]);
+        index.add_document_tokens(doc2, vec![("rust".to_string(), 0)]);
+        index.add_document_tokens(doc3, vec![("rust".to_string(), 0)]);
+
+        let segment = Segment {
+            id: "seg_000001".to_string(),
+            doctable,
+            index,
+        };
+
+        store.save_segment(&segment).unwrap();
+
+        let reader = SegmentReader::open(&store, "seg_000001").unwrap();
+        let searcher = SegmentSearcher::new(&reader);
+
+        let results = searcher.search_all(&["rust".to_string()], 1).unwrap();
+
+        assert_eq!(results.len(), 1);
+    }
+
+    #[test]
+    fn search_all_topk_uses_stable_ranking() {
+        let dir = tempdir().unwrap();
+        let store = SegmentStore::new(dir.path());
+
+        let mut doctable = DocTable::new();
+        let doc1 = doctable.add_document("b.txt".to_string());
+        let doc2 = doctable.add_document("a.txt".to_string());
+
+        let mut index = InvertedIndex::new();
+
+        index.add_document_tokens(doc1, vec![("rust".to_string(), 0)]);
+        index.add_document_tokens(doc2, vec![("rust".to_string(), 0)]);
+
+        let segment = Segment {
+            id: "seg_000001".to_string(),
+            doctable,
+            index,
+        };
+
+        store.save_segment(&segment).unwrap();
+
+        let reader = SegmentReader::open(&store, "seg_000001").unwrap();
+        let searcher = SegmentSearcher::new(&reader);
+
+        let results = searcher.search_all(&["rust".to_string()], 1).unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].path, "a.txt");
     }
 }

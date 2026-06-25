@@ -111,6 +111,16 @@ impl TopKCollector {
     }
 }
 
+pub trait Collector {
+    fn collect(&mut self, result: SearchResult);
+}
+
+impl Collector for TopKCollector {
+    fn collect(&mut self, result: SearchResult) {
+        TopKCollector::collect(self, result);
+    }
+}
+
 /// Legacy in-memory query processor used by snapshot search.
 pub struct QueryProcessor<'a> {
     index: &'a InvertedIndex,

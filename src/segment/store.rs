@@ -453,7 +453,7 @@ mod tests {
         assert_eq!(cache.readers().len(), 1);
 
         let searcher = SegmentSearcher::new(&cache.readers()[0]);
-        let results = searcher.search_any(&["rust".to_string()]).unwrap();
+        let results = searcher.search_any(&["rust".to_string()], 2).unwrap();
 
         let mut paths: Vec<_> = results.iter().map(|r| r.path.as_str()).collect();
         paths.sort();

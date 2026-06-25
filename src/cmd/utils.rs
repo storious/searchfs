@@ -116,9 +116,9 @@ pub(crate) fn search_with_cache(
         let searcher = SegmentSearcher::new(reader);
 
         let results = match mode {
-            QueryMode::All => searcher.search_all_topk(&terms, limit)?,
-            QueryMode::Any => searcher.search_any_topk(&terms, limit)?,
-            QueryMode::Phrase => searcher.search_phrase_topk(&terms, limit)?,
+            QueryMode::All => searcher.search_all(&terms, limit)?,
+            QueryMode::Any => searcher.search_any(&terms, limit)?,
+            QueryMode::Phrase => searcher.search_phrase(&terms, limit)?,
         };
 
         for result in results {
