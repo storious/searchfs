@@ -1,23 +1,35 @@
 # SearchFS
 
 > A toy search engine written in Rust, evolving from an in-memory inverted index
-> to a segment-based search engine inspired by Lucene and Tantivy.
+> into a modern segment-based search engine inspired by Lucene and Tantivy.
 
 ![CI](https://github.com/storious/searchfs/actions/workflows/ci.yaml/badge.svg)
+
+SearchFS is a learning project that incrementally implements the core building
+blocks of a modern search engine, including immutable segments, BM25 ranking,
+posting list compression, query planning, and parallel segment search.
+
+---
 
 ## Features
 
 Current capabilities include:
 
-- In-memory inverted index
-- Snapshot persistence
-- Incremental indexing
-- Immutable segment storage
-- Multi-segment search
-- Segment merge / compaction
-- BM25 ranking
-- Interactive search REPL
-- Segment inspection utilities
+* In-memory inverted index
+* Snapshot persistence
+* Incremental indexing
+* Immutable segment architecture
+* Multi-segment search
+* Parallel segment search
+* Segment merge / compaction
+* BM25 ranking
+* Posting list compression
+* Query planner
+* Top-K collector
+* Interactive search REPL
+* Segment inspection utilities
+* Pluggable storage backend
+* Pluggable posting codec
 
 ---
 
@@ -57,7 +69,7 @@ cargo run -- search-segments searchfs_index "rust memory" 10 or
 
 ---
 
-## REPL
+## Interactive REPL
 
 Start an interactive search session:
 
@@ -65,16 +77,18 @@ Start an interactive search session:
 cargo run -- repl searchfs_index
 ```
 
-Available commands:
+Built-in commands:
 
-```
+```text
 :q
+:help
+:stats
+
 :mode and
 :mode or
 :mode phrase
+
 :limit 20
-:stats
-:help
 ```
 
 ---
@@ -87,7 +101,7 @@ Append a new immutable segment:
 cargo run -- update-segment searchfs_index new_docs
 ```
 
-Merge all existing segments:
+Merge all segments:
 
 ```bash
 cargo run -- merge-segments searchfs_index
@@ -109,12 +123,6 @@ Run tests:
 make test
 ```
 
-Clean build artifacts:
-
-```bash
-make clean
-```
-
 Run Clippy:
 
 ```bash
@@ -127,30 +135,63 @@ Format source:
 cargo fmt
 ```
 
+Clean build artifacts:
+
+```bash
+make clean
+```
+
+---
+
+## Architecture
+
+```text
+                 Query
+
+                   │
+
+             Query Planner
+
+                   │
+
+           Segment Searcher
+
+                   │
+
+         Segment Reader Cache
+
+                   │
+
+            Segment Reader
+
+                   │
+
+             Segment Store
+
+                   │
+
+      Storage      +      Codec
+
+       │                      │
+
+ LocalStorage         PostingCodec
+
+ MemoryStorage      CompressedCodec
+```
+
 ---
 
 ## Project Structure
 
-```
-index/
-    tokenizer
-    cleaner
-    crawler
-    inverted index
+```text
+src/
 
-segment/
-    immutable segment format
-    segment reader
-    segment store
-    BM25 scorer
-    merge / compaction
-
-cmd/
-    CLI
-    REPL
-
-snapshot/
-    legacy snapshot persistence
+├── cmd/          CLI and REPL
+├── index/        Tokenization and in-memory indexing
+├── query/        Query planner and collectors
+├── segment/      Immutable segment engine
+├── snapshot/     Snapshot persistence
+└── storage/      Storage abstraction
 ```
 
 ---
@@ -158,3 +199,4 @@ snapshot/
 ## Roadmap
 
 See [ROADMAP.md](ROADMAP.md).
+
