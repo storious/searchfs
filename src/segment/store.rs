@@ -10,7 +10,8 @@ use std::path::PathBuf;
 
 use crate::engine::SearchEngine;
 use crate::index::doctable::DocId;
-use crate::index::memindex::InvertedIndex;
+use crate::index::memindex::{InvertedIndex, Position};
+use crate::segment::codec::{BincodePostingCodec, PostingCodec};
 
 pub struct SegmentStore {
     root: PathBuf,
@@ -66,8 +67,12 @@ impl SegmentStore {
 
             let doc_freq = docs.len();
 
-            let bytes =
-                bincode::serialize(&TermPostings { docs }).expect("serialize term postings");
+            let postings: HashMap<DocId, Vec<Position>> = postings
+                .iter()
+                .map(|(&doc_id, positions)| (doc_id, positions.clone()))
+                .collect();
+
+            let bytes = BincodePostingCodec::encode(&postings)?;
 
             postings_file.write_all(&bytes)?;
 

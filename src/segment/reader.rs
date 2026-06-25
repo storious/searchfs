@@ -6,7 +6,8 @@ use std::path::PathBuf;
 
 use crate::index::doctable::{DocId, DocTable};
 use crate::index::memindex::Position;
-use crate::segment::format::{SegmentDocs, SegmentMeta, SegmentTerms, TermEntry, TermPostings};
+use crate::segment::codec::{BincodePostingCodec, PostingCodec};
+use crate::segment::format::{SegmentDocs, SegmentMeta, SegmentTerms, TermEntry};
 use crate::segment::posting::PostingIterator;
 use crate::segment::store::SegmentStore;
 
@@ -106,14 +107,9 @@ impl SegmentReader {
         let mut buf = vec![0u8; entry.len as usize];
         file.read_exact(&mut buf)?;
 
-        let postings: TermPostings = bincode::deserialize(&buf).map_err(|err| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!("deserialize term postings: {err}"),
-            )
-        })?;
+        let postings = BincodePostingCodec::decode(&buf)?;
 
-        Ok(Some(postings.docs.into_iter().collect()))
+        Ok(Some(postings))
     }
 
     pub fn doc_path(&self, doc_id: DocId) -> Option<&str> {
