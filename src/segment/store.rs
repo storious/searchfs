@@ -94,6 +94,9 @@ impl SegmentStore {
             version: SEGMENT_TERMS_VERSION,
             terms: entries,
         };
+
+        let postings_size = offset;
+
         let meta = SegmentMeta {
             version: SEGMENT_META_VERSION,
             id: segment.id.clone(),
@@ -101,6 +104,7 @@ impl SegmentStore {
             term_count,
             posting_count,
             position_count,
+            postings_size,
         };
 
         let mut docmeta_docs: Vec<_> = doc_lens
@@ -464,5 +468,29 @@ mod tests {
         assert!(!store.segment_dir("seg_000001").exists());
         assert!(!store.segment_dir("seg_000002").exists());
         assert!(store.segment_dir("seg_000003").exists());
+    }
+
+    #[test]
+    fn segment_meta_contains_postings_size() {
+        let dir = tempdir().unwrap();
+        let store = SegmentStore::new(dir.path());
+
+        let mut doctable = DocTable::new();
+        let doc = doctable.add_document("a.txt".into());
+
+        let mut index = InvertedIndex::new();
+        index.add_document_tokens(doc, vec![("rust".into(), 0)]);
+
+        let segment = Segment {
+            id: "seg_000001".into(),
+            doctable,
+            index,
+        };
+
+        store.save_segment(&segment).unwrap();
+
+        let meta = store.load_segment_meta("seg_000001").unwrap();
+
+        assert!(meta.postings_size > 0);
     }
 }

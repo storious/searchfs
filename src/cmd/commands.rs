@@ -7,7 +7,9 @@ use crate::cmd::utils::{
 };
 use crate::engine::SearchEngine;
 use crate::query::{QueryMode, parse_query_mode};
-use crate::segment::format::{MANIFEST_VERSION, Manifest, next_segment_id};
+use crate::segment::format::{
+    MANIFEST_VERSION, Manifest, SEGMENT_META_VERSION, SegmentMeta, next_segment_id,
+};
 use crate::segment::reader::SegmentReaderCache;
 use crate::segment::store::SegmentStore;
 use crate::snapshot;
@@ -249,56 +251,36 @@ pub(crate) fn run_merge_segments(index_dir: &str) -> io::Result<()> {
 
 pub(crate) fn run_inspect_segments(index_dir: &str) -> io::Result<()> {
     let store = SegmentStore::new(index_dir);
-
     let manifest = store.load_manifest()?;
 
-    let mut total_docs = 0;
-    let mut total_terms = 0;
-    let mut total_postings = 0;
-    let mut total_positions = 0;
+    let mut total = SegmentMeta {
+        version: SEGMENT_META_VERSION,
+        id: "total".to_string(),
+        doc_count: 0,
+        term_count: 0,
+        posting_count: 0,
+        position_count: 0,
+        postings_size: 0,
+    };
 
     println!("segments={}", manifest.segments.len());
 
     for segment_id in &manifest.segments {
         let start = Instant::now();
-
         let meta = store.load_segment_meta(segment_id)?;
-
         let elapsed = start.elapsed();
 
-        let avg_doc_len = if meta.doc_count == 0 {
-            0.0
-        } else {
-            meta.position_count as f64 / meta.doc_count as f64
-        };
-
-        total_docs += meta.doc_count;
-        total_terms += meta.term_count;
-        total_postings += meta.posting_count;
-        total_positions += meta.position_count;
+        total.accumulate(&meta);
 
         println!();
         println!("{segment_id}");
-        println!("  docs={}", meta.doc_count);
-        println!("  terms={}", meta.term_count);
-        println!("  postings={}", meta.posting_count);
-        println!("  positions={}", meta.position_count);
         println!("  load_time={elapsed:.2?}");
-        println!("  avg_doc_len={avg_doc_len:.2}");
+        print!("{meta}");
     }
-
-    let avg_doc_len = if total_docs == 0 {
-        0.0
-    } else {
-        total_positions as f64 / total_docs as f64
-    };
 
     println!();
     println!("total");
-    println!("  docs={total_docs}");
-    println!("  terms={total_terms}");
-    println!("  postings={total_postings}");
-    println!("  positions={total_positions}");
-    println!("  avg_doc_len={avg_doc_len:.2}");
+    print!("{total}");
+
     Ok(())
 }

@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use crate::index::doctable::{DocId, DocTable};
 use crate::index::memindex::{InvertedIndex, Position};
 
+use std::fmt;
+
 pub const MANIFEST_VERSION: u32 = 1;
 pub const SEGMENT_META_VERSION: u32 = 1;
 pub const SEGMENT_TERMS_VERSION: u32 = 1;
@@ -53,6 +55,44 @@ pub struct SegmentMeta {
     pub term_count: usize,
     pub posting_count: usize,
     pub position_count: usize,
+    pub postings_size: u64,
+}
+
+impl fmt::Display for SegmentMeta {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "  docs={}", self.doc_count)?;
+        writeln!(f, "  terms={}", self.term_count)?;
+        writeln!(f, "  postings={}", self.posting_count)?;
+        writeln!(f, "  positions={}", self.position_count)?;
+
+        writeln!(f, "  avg_doc_len={:.2}", self.avg_doc_len())?;
+
+        writeln!(f, "  postings_size={:.2} MB", self.postings_size_mb())?;
+
+        Ok(())
+    }
+}
+
+impl SegmentMeta {
+    pub fn avg_doc_len(&self) -> f64 {
+        if self.doc_count == 0 {
+            return 0.0;
+        }
+
+        self.position_count as f64 / self.doc_count as f64
+    }
+
+    pub fn postings_size_mb(&self) -> f64 {
+        self.postings_size as f64 / 1_000_000.0
+    }
+
+    pub fn accumulate(&mut self, other: &SegmentMeta) {
+        self.doc_count += other.doc_count;
+        self.term_count += other.term_count;
+        self.posting_count += other.posting_count;
+        self.position_count += other.position_count;
+        self.postings_size += other.postings_size;
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
