@@ -45,17 +45,18 @@ building blocks of a modern search engine.
 - Binary term dictionary
 - Query planner
 - Top-K collector
-- Parallel segment search
 
 ---
 
 ## v0.5.x — Storage Engine
 
-- Object storage abstraction
-- Local filesystem backend
-- Memory-mapped segments
-- Background merge scheduler
-- Segment cache
+✓ Storage abstraction
+✓ Local filesystem backend
+□ In-memory storage backend
+□ Segment cache
+□ Memory-mapped local storage
+□ Background merge scheduler
+□ Parallel segment search
 
 ---
 

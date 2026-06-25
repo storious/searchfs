@@ -218,7 +218,6 @@ mod tests {
     use crate::index::memindex::InvertedIndex;
     use crate::query::CountCollector;
     use crate::segment::format::Segment;
-    use crate::segment::reader::SegmentReader;
     use crate::segment::search::SegmentSearcher;
     use crate::segment::store::SegmentStore;
 
@@ -243,7 +242,7 @@ mod tests {
             index,
         };
         store.save_segment(&segment).unwrap();
-        let reader = SegmentReader::open(&store, "seg_000001").unwrap();
+        let reader = store.open_reader("seg_000001").unwrap();
         let results = SegmentSearcher::new(&reader)
             .search_all(&["rust".to_string(), "memory".to_string()], 1)
             .unwrap();
@@ -280,7 +279,7 @@ mod tests {
 
         store.save_segment(&segment).unwrap();
 
-        let reader = SegmentReader::open(&store, "seg_000001").unwrap();
+        let reader = store.open_reader("seg_000001").unwrap();
 
         let terms = vec!["memory".to_string(), "python".to_string()];
         let results = SegmentSearcher::new(&reader).search_any(&terms, 2).unwrap();
@@ -322,7 +321,7 @@ mod tests {
             index,
         };
         store.save_segment(&segment).unwrap();
-        let reader = SegmentReader::open(&store, "seg_000001").unwrap();
+        let reader = store.open_reader("seg_000001").unwrap();
         let terms = vec!["white".to_string(), "whale".to_string()];
         let results = SegmentSearcher::new(&reader)
             .search_phrase(&terms, 1)
@@ -362,7 +361,7 @@ mod tests {
 
         store.save_segment(&segment).unwrap();
 
-        let reader = SegmentReader::open(&store, "seg_000001").unwrap();
+        let reader = store.open_reader("seg_000001").unwrap();
 
         let searcher = SegmentSearcher::new(&reader);
 
@@ -398,7 +397,7 @@ mod tests {
 
         store.save_segment(&segment).unwrap();
 
-        let reader = SegmentReader::open(&store, "seg_000001").unwrap();
+        let reader = store.open_reader("seg_000001").unwrap();
         let searcher = SegmentSearcher::new(&reader);
 
         let results = searcher.search_all(&["rust".to_string()], 1).unwrap();
@@ -428,7 +427,7 @@ mod tests {
 
         store.save_segment(&segment).unwrap();
 
-        let reader = SegmentReader::open(&store, "seg_000001").unwrap();
+        let reader = store.open_reader("seg_000001").unwrap();
         let searcher = SegmentSearcher::new(&reader);
 
         let results = searcher.search_all(&["rust".to_string()], 1).unwrap();
@@ -460,7 +459,7 @@ mod tests {
 
         store.save_segment(&segment).unwrap();
 
-        let reader = SegmentReader::open(&store, "seg_000001").unwrap();
+        let reader = store.open_reader("seg_000001").unwrap();
 
         let searcher = SegmentSearcher::new(&reader);
 

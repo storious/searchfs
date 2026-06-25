@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::index::doctable::{DocId, DocTable};
 use crate::index::memindex::{InvertedIndex, Position};
 
+use std::collections::HashMap;
 use std::fmt;
 
 pub const MANIFEST_VERSION: u32 = 1;
@@ -15,6 +16,16 @@ pub struct Segment {
     pub id: String,
     pub doctable: DocTable,
     pub index: InvertedIndex,
+}
+
+/// Segment layout in memeroy
+pub struct SegmentData {
+    pub id: String,
+    pub docs: DocTable,
+    pub terms: HashMap<String, TermEntry>,
+    pub postings: Vec<u8>,
+    pub meta: SegmentMeta,
+    pub doc_lens: HashMap<DocId, usize>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

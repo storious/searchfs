@@ -8,9 +8,10 @@ use crate::index::memindex::{InvertedIndex, Position};
 use crate::segment::codec::{CompressedPostingCodec, PostingCodec};
 use crate::segment::format::{
     DocMetaEntry, MANIFEST_VERSION, Manifest, SEGMENT_DOC_META_VERSION, SEGMENT_META_VERSION,
-    SEGMENT_TERMS_VERSION, Segment, SegmentDocMeta, SegmentDocs, SegmentMeta, SegmentTerms,
-    TermEntry, next_segment_id,
+    SEGMENT_TERMS_VERSION, Segment, SegmentData, SegmentDocMeta, SegmentDocs, SegmentMeta,
+    SegmentTerms, TermEntry, next_segment_id,
 };
+use crate::segment::reader::SegmentReader;
 use crate::storage::Storage;
 use crate::storage::local::LocalStorage;
 
@@ -31,6 +32,50 @@ impl<S: Storage> SegmentStore<S> {
             storage,
             codec: Box::new(CompressedPostingCodec),
         }
+    }
+    pub fn open_reader(&self, id: &str) -> io::Result<SegmentReader> {
+        let docs_bytes = self.read_segment_docs_bytes(id)?;
+        let terms_bytes = self.read_segment_terms_bytes(id)?;
+        let postings_bytes = self.read_segment_postings_bytes(id)?;
+
+        let docs: SegmentDocs = bincode::deserialize(&docs_bytes).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("deserialize segment docs: {err}"),
+            )
+        })?;
+
+        let terms: SegmentTerms = bincode::deserialize(&terms_bytes).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("deserialize segment terms: {err}"),
+            )
+        })?;
+
+        let terms = terms
+            .terms
+            .into_iter()
+            .map(|entry| (entry.term.clone(), entry))
+            .collect();
+
+        let meta = self.load_segment_meta(id)?;
+        let docmeta = self.load_segment_docmeta(id)?;
+
+        let doc_lens = docmeta
+            .docs
+            .into_iter()
+            .map(|entry| (entry.doc_id, entry.doc_len))
+            .collect();
+        let data = SegmentData {
+            id: id.to_string(),
+            docs: docs.doctable,
+            terms,
+            postings: postings_bytes,
+            meta,
+            doc_lens,
+        };
+
+        Ok(SegmentReader::new(data, self.codec.clone_box()))
     }
 
     pub fn init(&self) -> std::io::Result<()> {
@@ -527,5 +572,31 @@ mod tests {
         let meta = store.load_segment_meta("seg_000001").unwrap();
 
         assert!(meta.postings_size > 0);
+    }
+
+    #[test]
+    fn segment_store_works_with_memory_storage() {
+        use crate::storage::memory::MemoryStorage;
+
+        let storage = MemoryStorage::new();
+        let store = SegmentStore::with_storage(storage);
+
+        let mut doctable = DocTable::new();
+        let doc = doctable.add_document("a.txt".to_string());
+
+        let mut index = InvertedIndex::new();
+        index.add_document_tokens(doc, vec![("rust".to_string(), 0)]);
+
+        let segment = Segment {
+            id: "seg_000001".to_string(),
+            doctable,
+            index,
+        };
+
+        store.save_segment(&segment).unwrap();
+
+        let restored = store.load_segment("seg_000001").unwrap();
+
+        assert_eq!(restored.id, "seg_000001");
     }
 }

@@ -4,7 +4,7 @@ use std::io;
 use crate::index::doctable::{DocId, DocTable};
 use crate::index::memindex::Position;
 use crate::segment::codec::PostingCodec;
-use crate::segment::format::{SegmentDocs, SegmentMeta, SegmentTerms, TermEntry};
+use crate::segment::format::{SegmentData, SegmentMeta, TermEntry};
 use crate::segment::posting::PostingIterator;
 use crate::segment::store::SegmentStore;
 use crate::storage::Storage;
@@ -24,13 +24,13 @@ pub struct SegmentReaderCache {
 }
 
 impl SegmentReaderCache {
-    pub fn open<S: Storage>(store: &SegmentStore<S>) -> std::io::Result<Self> {
+    pub(crate) fn open<S: Storage>(store: &SegmentStore<S>) -> std::io::Result<Self> {
         let manifest = store.load_manifest()?;
 
         let mut readers = Vec::new();
 
         for segment_id in manifest.segments {
-            readers.push(SegmentReader::open(store, &segment_id)?);
+            readers.push(store.open_reader(&segment_id)?);
         }
 
         Ok(Self { readers })
@@ -42,57 +42,24 @@ impl SegmentReaderCache {
 }
 
 impl SegmentReader {
+    pub(crate) fn new(data: SegmentData, codec: Box<dyn PostingCodec>) -> Self {
+        Self {
+            id: data.id,
+            docs: data.docs,
+            terms: data.terms,
+            postings_bytes: data.postings,
+            meta: data.meta,
+            doc_lens: data.doc_lens,
+            codec,
+        }
+    }
+
     pub fn posting_iter(&self, term: &str) -> io::Result<Option<PostingIterator>> {
         let Some(postings) = self.lookup(term)? else {
             return Ok(None);
         };
 
         Ok(Some(PostingIterator::from_postings(postings)))
-    }
-
-    pub fn open<S: Storage>(store: &SegmentStore<S>, id: &str) -> std::io::Result<Self> {
-        let docs_bytes = store.read_segment_docs_bytes(id)?;
-        let terms_bytes = store.read_segment_terms_bytes(id)?;
-        let postings_bytes = store.read_segment_postings_bytes(id)?;
-
-        let docs: SegmentDocs = bincode::deserialize(&docs_bytes).map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("deserialize segment docs: {err}"),
-            )
-        })?;
-
-        let terms: SegmentTerms = bincode::deserialize(&terms_bytes).map_err(|err| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("deserialize segment terms: {err}"),
-            )
-        })?;
-
-        let terms = terms
-            .terms
-            .into_iter()
-            .map(|entry| (entry.term.clone(), entry))
-            .collect();
-
-        let meta = store.load_segment_meta(id)?;
-        let docmeta = store.load_segment_docmeta(id)?;
-
-        let doc_lens = docmeta
-            .docs
-            .into_iter()
-            .map(|entry| (entry.doc_id, entry.doc_len))
-            .collect();
-
-        Ok(Self {
-            id: id.to_string(),
-            docs: docs.doctable,
-            terms,
-            postings_bytes,
-            meta,
-            doc_lens,
-            codec: store.codec.clone_box(),
-        })
     }
 
     pub fn lookup(&self, term: &str) -> std::io::Result<Option<HashMap<DocId, Vec<Position>>>> {
@@ -166,7 +133,7 @@ mod tests {
     use crate::index::doctable::DocTable;
     use crate::index::memindex::InvertedIndex;
     use crate::segment::format::{MANIFEST_VERSION, Manifest, Segment};
-    use crate::segment::reader::{SegmentReader, SegmentReaderCache};
+    use crate::segment::reader::SegmentReaderCache;
     use crate::segment::store::SegmentStore;
 
     use tempfile::tempdir;
@@ -192,7 +159,7 @@ mod tests {
             index,
         };
         store.save_segment(&segment).unwrap();
-        let reader = SegmentReader::open(&store, "seg_000001").unwrap();
+        let reader = store.open_reader("seg_000001").unwrap();
         let postings = reader.lookup("rust").unwrap().unwrap();
         assert_eq!(postings.get(&1), Some(&vec![0, 2]));
         assert_eq!(reader.lookup("missing").unwrap(), None);
@@ -255,7 +222,7 @@ mod tests {
 
         store.save_segment(&segment).unwrap();
 
-        let reader = SegmentReader::open(&store, "seg_000001").unwrap();
+        let reader = store.open_reader("seg_000001").unwrap();
 
         assert_eq!(reader.doc_len(doc1), 3);
         assert_eq!(reader.doc_len(doc2), 2);

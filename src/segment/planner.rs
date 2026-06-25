@@ -40,7 +40,6 @@ mod tests {
     use crate::index::doctable::DocTable;
     use crate::index::memindex::InvertedIndex;
     use crate::segment::format::Segment;
-    use crate::segment::reader::SegmentReader;
     use crate::segment::store::SegmentStore;
     use tempfile::tempdir;
 
@@ -70,7 +69,7 @@ mod tests {
 
         store.save_segment(&segment).unwrap();
 
-        let reader = SegmentReader::open(&store, "seg_000001").unwrap();
+        let reader = store.open_reader("seg_000001").unwrap();
 
         let terms = vec!["common".to_string(), "rare".to_string()];
         let plan = QueryPlan::for_all_terms(&reader, &terms);
