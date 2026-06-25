@@ -22,6 +22,16 @@ pub enum QueryMode {
     Phrase,
 }
 
+impl QueryMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            QueryMode::All => "and",
+            QueryMode::Any => "or",
+            QueryMode::Phrase => "phrase",
+        }
+    }
+}
+
 impl TryFrom<&str> for QueryMode {
     type Error = String;
 

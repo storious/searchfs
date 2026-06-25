@@ -2,7 +2,7 @@ use std::io::{self, Write};
 use std::path::Path;
 use std::time::Instant;
 
-use crate::cmd::utils::{print_results, search_with_cache};
+use crate::cmd::utils::{print_repl_help, print_repl_stats, print_results, search_with_cache};
 use crate::engine::SearchEngine;
 use crate::query::{QueryMode, parse_query_mode};
 use crate::segment::format::{MANIFEST_VERSION, Manifest, next_segment_id};
@@ -196,6 +196,8 @@ pub(crate) fn run_repl(index_dir: &str) -> io::Result<()> {
 
     let stdin = io::stdin();
     let mut line = String::new();
+    let mut limit = 10usize;
+    let mut mode = QueryMode::All;
 
     loop {
         print!("searchfs> ");
@@ -219,15 +221,60 @@ pub(crate) fn run_repl(index_dir: &str) -> io::Result<()> {
             break;
         }
 
-        let (query, mode) = parse_query_mode(query, QueryMode::All);
+        if query == ":help" {
+            print_repl_help();
+            continue;
+        }
+
+        if query == ":stats" {
+            print_repl_stats(&cache, mode, limit);
+            continue;
+        }
+
+        if let Some(value) = query.strip_prefix(":limit ") {
+            match value.parse::<usize>() {
+                Ok(n) if n > 0 => {
+                    limit = n;
+                    eprintln!("limit={limit}");
+                }
+                _ => {
+                    eprintln!("invalid limit: {value}");
+                }
+            }
+
+            continue;
+        }
+
+        if let Some(value) = query.strip_prefix(":mode ") {
+            match value {
+                "and" => {
+                    mode = QueryMode::All;
+                    eprintln!("mode=and");
+                }
+                "or" => {
+                    mode = QueryMode::Any;
+                    eprintln!("mode=or");
+                }
+                "phrase" => {
+                    mode = QueryMode::Phrase;
+                    eprintln!("mode=phrase");
+                }
+                _ => {
+                    eprintln!("invalid mode: {value}");
+                }
+            }
+
+            continue;
+        }
+
+        let (query, query_mode) = parse_query_mode(query, mode);
 
         let start = Instant::now();
-        let results = search_with_cache(&cache, query, mode)?;
-
+        let results = search_with_cache(&cache, query, query_mode)?;
         let elapsed = start.elapsed();
 
         eprintln!("search_time={elapsed:.2?}");
-        print_results(results, 10);
+        print_results(results, limit);
     }
 
     Ok(())

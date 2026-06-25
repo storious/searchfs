@@ -132,6 +132,14 @@ impl SegmentReader {
 
         self.meta.position_count as f64 / self.meta.doc_count as f64
     }
+
+    pub fn term_count(&self) -> usize {
+        self.meta.term_count
+    }
+
+    pub fn posting_count(&self) -> usize {
+        self.meta.posting_count
+    }
 }
 
 #[cfg(test)]
