@@ -22,6 +22,41 @@ impl Default for ReplState {
     }
 }
 
+#[derive(Debug, Default)]
+struct ReplStats {
+    segments: usize,
+    docs: usize,
+    terms: usize,
+    postings: usize,
+    positions: usize,
+}
+
+impl ReplStats {
+    fn from_cache(cache: &SegmentReaderCache) -> Self {
+        let mut stats = Self {
+            segments: cache.readers().len(),
+            ..Self::default()
+        };
+
+        for reader in cache.readers() {
+            stats.docs += reader.doc_count();
+            stats.terms += reader.term_count();
+            stats.postings += reader.posting_count();
+            stats.positions += reader.position_count();
+        }
+
+        stats
+    }
+
+    fn avg_doc_len(&self) -> f64 {
+        if self.docs == 0 {
+            0.0
+        } else {
+            self.positions as f64 / self.docs as f64
+        }
+    }
+}
+
 pub(crate) enum ReplCommandResult {
     Continue,
     Exit,
@@ -180,30 +215,14 @@ pub(crate) fn print_repl_help() {
 }
 
 pub(crate) fn print_repl_stats(cache: &SegmentReaderCache, mode: QueryMode, limit: usize) {
-    let mut total_docs = 0usize;
-    let mut total_terms = 0usize;
-    let mut total_postings = 0usize;
-    let mut total_positions = 0usize;
+    let stats = ReplStats::from_cache(cache);
 
-    for reader in cache.readers() {
-        total_docs += reader.doc_count();
-        total_terms += reader.term_count();
-        total_postings += reader.posting_count();
-        total_positions += reader.position_count();
-    }
-
-    let avg_doc_len = if total_docs == 0 {
-        0.0
-    } else {
-        total_positions as f64 / total_docs as f64
-    };
-
-    eprintln!("segments={}", cache.readers().len());
-    eprintln!("docs={total_docs}");
-    eprintln!("terms={total_terms}");
-    eprintln!("postings={total_postings}");
-    eprintln!("positions={total_positions}");
-    eprintln!("avg_doc_len={avg_doc_len:.2}");
+    eprintln!("segments={}", stats.segments);
+    eprintln!("docs={}", stats.docs);
+    eprintln!("terms={}", stats.terms);
+    eprintln!("postings={}", stats.postings);
+    eprintln!("positions={}", stats.positions);
+    eprintln!("avg_doc_len={:.2}", stats.avg_doc_len());
     eprintln!("mode={}", mode.as_str());
     eprintln!("limit={limit}");
 }
