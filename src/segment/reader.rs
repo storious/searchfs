@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use crate::index::doctable::{DocId, DocTable};
 use crate::index::memindex::Position;
-use crate::segment::codec::{BincodePostingCodec, PostingCodec};
+use crate::segment::codec::PostingCodec;
 use crate::segment::format::{SegmentDocs, SegmentMeta, SegmentTerms, TermEntry};
 use crate::segment::posting::PostingIterator;
 use crate::segment::store::SegmentStore;
@@ -18,6 +18,7 @@ pub struct SegmentReader {
     postings_path: PathBuf,
     meta: SegmentMeta,
     doc_lens: HashMap<DocId, usize>,
+    pub codec: Box<dyn PostingCodec>,
 }
 
 pub struct SegmentReaderCache {
@@ -92,6 +93,7 @@ impl SegmentReader {
             postings_path: store.segment_postings_path(id),
             meta,
             doc_lens,
+            codec: store.codec.clone_box(),
         })
     }
 
@@ -107,7 +109,7 @@ impl SegmentReader {
         let mut buf = vec![0u8; entry.len as usize];
         file.read_exact(&mut buf)?;
 
-        let postings = BincodePostingCodec::decode(&buf)?;
+        let postings = self.codec.decode(&buf)?;
 
         Ok(Some(postings))
     }

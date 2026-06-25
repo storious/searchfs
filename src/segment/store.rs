@@ -1,7 +1,7 @@
 use crate::segment::format::{
     DocMetaEntry, MANIFEST_VERSION, Manifest, SEGMENT_DOC_META_VERSION, SEGMENT_META_VERSION,
     SEGMENT_TERMS_VERSION, Segment, SegmentDocMeta, SegmentDocs, SegmentMeta, SegmentTerms,
-    TermEntry, TermPostings, next_segment_id,
+    TermEntry, next_segment_id,
 };
 use std::collections::HashMap;
 use std::fs;
@@ -11,15 +11,19 @@ use std::path::PathBuf;
 use crate::engine::SearchEngine;
 use crate::index::doctable::DocId;
 use crate::index::memindex::{InvertedIndex, Position};
-use crate::segment::codec::{BincodePostingCodec, PostingCodec};
+use crate::segment::codec::{CompressedPostingCodec, PostingCodec};
 
 pub struct SegmentStore {
     root: PathBuf,
+    pub codec: Box<dyn PostingCodec>,
 }
 
 impl SegmentStore {
     pub fn new(root: impl Into<PathBuf>) -> Self {
-        Self { root: root.into() }
+        Self {
+            root: root.into(),
+            codec: Box::new(CompressedPostingCodec),
+        }
     }
 
     pub fn init(&self) -> std::io::Result<()> {
@@ -72,7 +76,7 @@ impl SegmentStore {
                 .map(|(&doc_id, positions)| (doc_id, positions.clone()))
                 .collect();
 
-            let bytes = BincodePostingCodec::encode(&postings)?;
+            let bytes = self.codec.encode(&postings)?;
 
             postings_file.write_all(&bytes)?;
 
@@ -156,14 +160,7 @@ impl SegmentStore {
             let mut buf = vec![0u8; entry.len as usize];
             postings_file.read_exact(&mut buf)?;
 
-            let postings: TermPostings = bincode::deserialize(&buf).map_err(|err| {
-                io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("deserialize terms postings: {err}"),
-                )
-            })?;
-
-            let map = postings.docs.into_iter().collect();
+            let map = self.codec.decode(&buf)?;
 
             index.insert_postings(entry.term, map);
         }

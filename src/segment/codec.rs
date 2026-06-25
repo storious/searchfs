@@ -6,15 +6,21 @@ use std::collections::HashMap;
 use std::io;
 
 pub trait PostingCodec {
-    fn encode(postings: &HashMap<DocId, Vec<Position>>) -> io::Result<Vec<u8>>;
+    fn encode(&self, postings: &HashMap<DocId, Vec<Position>>) -> io::Result<Vec<u8>>;
 
-    fn decode(bytes: &[u8]) -> io::Result<HashMap<DocId, Vec<Position>>>;
+    fn decode(&self, bytes: &[u8]) -> io::Result<HashMap<DocId, Vec<Position>>>;
+
+    fn clone_box(&self) -> Box<dyn PostingCodec>;
 }
 
 pub struct BincodePostingCodec;
 
 impl PostingCodec for BincodePostingCodec {
-    fn encode(postings: &HashMap<DocId, Vec<Position>>) -> io::Result<Vec<u8>> {
+    fn clone_box(&self) -> Box<dyn PostingCodec> {
+        Box::new(BincodePostingCodec)
+    }
+
+    fn encode(&self, postings: &HashMap<DocId, Vec<Position>>) -> io::Result<Vec<u8>> {
         let docs: Vec<_> = postings
             .iter()
             .map(|(&doc_id, positions)| (doc_id, positions.clone()))
@@ -28,7 +34,7 @@ impl PostingCodec for BincodePostingCodec {
         })
     }
 
-    fn decode(bytes: &[u8]) -> io::Result<HashMap<DocId, Vec<Position>>> {
+    fn decode(&self, bytes: &[u8]) -> io::Result<HashMap<DocId, Vec<Position>>> {
         let postings: TermPostings = bincode::deserialize(bytes).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -43,11 +49,15 @@ impl PostingCodec for BincodePostingCodec {
 pub struct CompressedPostingCodec;
 
 impl PostingCodec for CompressedPostingCodec {
-    fn encode(postings: &HashMap<DocId, Vec<Position>>) -> io::Result<Vec<u8>> {
+    fn clone_box(&self) -> Box<dyn PostingCodec> {
+        Box::new(CompressedPostingCodec)
+    }
+
+    fn encode(&self, postings: &HashMap<DocId, Vec<Position>>) -> io::Result<Vec<u8>> {
         Ok(encode_postings(postings).bytes)
     }
 
-    fn decode(bytes: &[u8]) -> io::Result<HashMap<DocId, Vec<Position>>> {
+    fn decode(&self, bytes: &[u8]) -> io::Result<HashMap<DocId, Vec<Position>>> {
         decode_postings(&CompressedPostingList {
             bytes: bytes.to_vec(),
         })
@@ -333,8 +343,9 @@ mod tests {
     fn bincode_posting_codec_roundtrip() {
         let postings = HashMap::from([(1, vec![0, 2, 5]), (5, vec![1]), (9, vec![3, 7])]);
 
-        let bytes = BincodePostingCodec::encode(&postings).unwrap();
-        let decoded = BincodePostingCodec::decode(&bytes).unwrap();
+        let codec = BincodePostingCodec;
+        let bytes = codec.encode(&postings).unwrap();
+        let decoded = codec.decode(&bytes).unwrap();
 
         assert_eq!(decoded, postings);
     }
@@ -343,8 +354,9 @@ mod tests {
     fn compressed_posting_codec_roundtrip() {
         let postings = HashMap::from([(1, vec![0, 2, 5]), (5, vec![1]), (9, vec![3, 7])]);
 
-        let bytes = CompressedPostingCodec::encode(&postings).unwrap();
-        let decoded = CompressedPostingCodec::decode(&bytes).unwrap();
+        let codec = CompressedPostingCodec;
+        let bytes = codec.encode(&postings).unwrap();
+        let decoded = codec.decode(&bytes).unwrap();
 
         assert_eq!(decoded, postings);
     }
