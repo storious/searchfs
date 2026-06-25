@@ -11,7 +11,7 @@ use crate::segment::format::{
     SEGMENT_TERMS_VERSION, Segment, SegmentData, SegmentDocMeta, SegmentDocs, SegmentMeta,
     SegmentTerms, TermEntry, next_segment_id,
 };
-use crate::segment::reader::SegmentReader;
+use crate::segment::reader::{SegmentReader, SegmentReaderCache};
 use crate::storage::Storage;
 use crate::storage::local::LocalStorage;
 
@@ -33,6 +33,19 @@ impl<S: Storage> SegmentStore<S> {
             codec: Box::new(CompressedPostingCodec),
         }
     }
+
+    pub fn open_reader_cache(&self) -> io::Result<SegmentReaderCache> {
+        let manifest = self.load_manifest()?;
+
+        let mut readers = Vec::new();
+
+        for id in manifest.segments {
+            readers.push(self.open_reader(&id)?);
+        }
+
+        Ok(SegmentReaderCache::new(readers))
+    }
+
     pub fn open_reader(&self, id: &str) -> io::Result<SegmentReader> {
         let docs_bytes = self.read_segment_docs_bytes(id)?;
         let terms_bytes = self.read_segment_terms_bytes(id)?;
@@ -401,7 +414,6 @@ mod tests {
     use crate::index::doctable::DocTable;
     use crate::index::memindex::InvertedIndex;
     use crate::segment::format::{MANIFEST_VERSION, Manifest, Segment};
-    use crate::segment::reader::SegmentReaderCache;
     use crate::segment::search::SegmentSearcher;
     use crate::segment::store::SegmentStore;
     use tempfile::tempdir;
@@ -535,7 +547,7 @@ mod tests {
 
         store.merge_all_segments().unwrap();
 
-        let cache = SegmentReaderCache::open(&store).unwrap();
+        let cache = store.open_reader_cache().unwrap();
         assert_eq!(cache.readers().len(), 1);
 
         let searcher = SegmentSearcher::new(&cache.readers()[0]);

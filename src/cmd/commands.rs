@@ -10,7 +10,6 @@ use crate::query::{QueryMode, parse_query_mode};
 use crate::segment::format::{
     MANIFEST_VERSION, Manifest, SEGMENT_META_VERSION, SegmentMeta, next_segment_id,
 };
-use crate::segment::reader::SegmentReaderCache;
 use crate::segment::store::SegmentStore;
 use crate::snapshot;
 
@@ -137,7 +136,7 @@ pub(crate) fn run_search_segments(
 
     let start = Instant::now();
 
-    let cache = SegmentReaderCache::open(&store)?;
+    let cache = store.open_reader_cache()?;
 
     let results = search_with_cache(&cache, query, mode, limit)?;
 
@@ -187,7 +186,7 @@ pub(crate) fn run_repl(index_dir: &str) -> io::Result<()> {
     let store = SegmentStore::new(index_dir);
 
     let load_start = Instant::now();
-    let cache = SegmentReaderCache::open(&store)?;
+    let cache = store.open_reader_cache()?;
     let load_elapsed = load_start.elapsed();
 
     eprintln!(

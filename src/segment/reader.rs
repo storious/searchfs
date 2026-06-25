@@ -6,8 +6,6 @@ use crate::index::memindex::Position;
 use crate::segment::codec::PostingCodec;
 use crate::segment::format::{SegmentData, SegmentMeta, TermEntry};
 use crate::segment::posting::PostingIterator;
-use crate::segment::store::SegmentStore;
-use crate::storage::Storage;
 
 pub struct SegmentReader {
     id: String,
@@ -24,16 +22,8 @@ pub struct SegmentReaderCache {
 }
 
 impl SegmentReaderCache {
-    pub(crate) fn open<S: Storage>(store: &SegmentStore<S>) -> std::io::Result<Self> {
-        let manifest = store.load_manifest()?;
-
-        let mut readers = Vec::new();
-
-        for segment_id in manifest.segments {
-            readers.push(store.open_reader(&segment_id)?);
-        }
-
-        Ok(Self { readers })
+    pub fn new(readers: Vec<SegmentReader>) -> Self {
+        Self { readers }
     }
 
     pub fn readers(&self) -> &[SegmentReader] {
@@ -133,7 +123,6 @@ mod tests {
     use crate::index::doctable::DocTable;
     use crate::index::memindex::InvertedIndex;
     use crate::segment::format::{MANIFEST_VERSION, Manifest, Segment};
-    use crate::segment::reader::SegmentReaderCache;
     use crate::segment::store::SegmentStore;
 
     use tempfile::tempdir;
@@ -184,7 +173,7 @@ mod tests {
             segments: vec!["seg_000001".to_string()],
         };
         store.save_manifest(&manifest).unwrap();
-        let cache = SegmentReaderCache::open(&store).unwrap();
+        let cache = store.open_reader_cache().unwrap();
         assert_eq!(cache.readers().len(), 1);
         assert_eq!(cache.readers()[0].id(), "seg_000001");
     }
