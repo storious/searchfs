@@ -10,9 +10,14 @@ pub struct SearchResult {
     pub score: f64,
 }
 
-pub struct QueryProcessor<'a> {
-    index: &'a InvertedIndex,
-    doctable: &'a DocTable,
+impl SearchResult {
+    pub fn sort(results: &mut [Self]) {
+        results.sort_by(|a, b| {
+            b.score
+                .total_cmp(&a.score)
+                .then_with(|| a.path.cmp(&b.path))
+        });
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,6 +48,12 @@ impl TryFrom<&str> for QueryMode {
             other => Err(format!("unknown query mode: {other}")),
         }
     }
+}
+
+/// Legacy in-memory query processor used by snapshot search.
+pub struct QueryProcessor<'a> {
+    index: &'a InvertedIndex,
+    doctable: &'a DocTable,
 }
 
 impl<'a> QueryProcessor<'a> {
@@ -102,12 +113,8 @@ impl<'a> QueryProcessor<'a> {
                 score,
             });
         }
-        results.sort_by(|a, b| {
-            b.score
-                .total_cmp(&a.score)
-                .then_with(|| a.path.cmp(&b.path))
-        });
 
+        SearchResult::sort(&mut results);
         results
     }
 
@@ -139,12 +146,7 @@ impl<'a> QueryProcessor<'a> {
         }
 
         let mut results: Vec<_> = merged.into_values().collect();
-
-        results.sort_by(|a, b| {
-            b.score
-                .total_cmp(&a.score)
-                .then_with(|| a.path.cmp(&b.path))
-        });
+        SearchResult::sort(&mut results);
 
         results
     }
@@ -187,16 +189,11 @@ impl<'a> QueryProcessor<'a> {
             results.push(SearchResult {
                 doc_id,
                 path: path.to_string(),
-                score: phrase_count as f64, // TODO BM25
+                score: phrase_count as f64,
             });
         }
 
-        results.sort_by(|a, b| {
-            b.score
-                .total_cmp(&a.score)
-                .then_with(|| a.path.cmp(&b.path))
-        });
-
+        SearchResult::sort(&mut results);
         results
     }
 

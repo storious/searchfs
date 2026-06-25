@@ -1,17 +1,22 @@
 use crate::index::doctable::DocId;
 use crate::query::SearchResult;
 use crate::segment::reader::SegmentReader;
+use crate::segment::scorer::Bm25Scorer;
 
 use std::collections::HashMap;
 use std::io;
 
 pub struct SegmentSearcher<'a> {
     reader: &'a SegmentReader,
+    scorer: Bm25Scorer<'a>,
 }
 
 impl<'a> SegmentSearcher<'a> {
     pub fn new(reader: &'a SegmentReader) -> Self {
-        Self { reader }
+        Self {
+            reader,
+            scorer: Bm25Scorer::new(reader),
+        }
     }
 
     pub fn search_all(&self, terms: &[String]) -> io::Result<Vec<SearchResult>> {
@@ -42,7 +47,7 @@ impl<'a> SegmentSearcher<'a> {
         let mut results = Vec::new();
 
         for (&doc_id, first_positions) in &first_postings {
-            let mut score = self.bm25(first_term, doc_id, first_positions.len());
+            let mut score = self.scorer.score(first_term, doc_id, first_positions.len());
             let mut matched = true;
 
             for (term, postings) in &other_postings {
@@ -51,7 +56,7 @@ impl<'a> SegmentSearcher<'a> {
                     break;
                 };
 
-                score += self.bm25(term, doc_id, positions.len());
+                score += self.scorer.score(term, doc_id, positions.len());
             }
 
             if !matched {
@@ -69,7 +74,7 @@ impl<'a> SegmentSearcher<'a> {
             });
         }
 
-        self.sort_results(&mut results);
+        SearchResult::sort(&mut results);
         Ok(results)
     }
 
@@ -86,7 +91,7 @@ impl<'a> SegmentSearcher<'a> {
                     continue;
                 };
 
-                let score = self.bm25(term, doc_id, positions.len());
+                let score = self.scorer.score(term, doc_id, positions.len());
 
                 merged
                     .entry(doc_id)
@@ -102,7 +107,7 @@ impl<'a> SegmentSearcher<'a> {
         }
 
         let mut results: Vec<_> = merged.into_values().collect();
-        self.sort_results(&mut results);
+        SearchResult::sort(&mut results);
         Ok(results)
     }
 
@@ -159,42 +164,8 @@ impl<'a> SegmentSearcher<'a> {
             });
         }
 
-        self.sort_results(&mut results);
+        SearchResult::sort(&mut results);
         Ok(results)
-    }
-
-    fn sort_results(&self, results: &mut [SearchResult]) {
-        results.sort_by(|a, b| {
-            b.score
-                .total_cmp(&a.score)
-                .then_with(|| a.path.cmp(&b.path))
-        });
-    }
-
-    fn bm25(&self, term: &str, doc_id: DocId, tf: usize) -> f64 {
-        let n = self.reader.doc_count() as f64;
-        let df = self.reader.document_frequency(term) as f64;
-
-        if n == 0.0 || df == 0.0 || tf == 0 {
-            return 0.0;
-        }
-
-        let k1 = 1.2;
-        let b = 0.75;
-
-        let tf = tf as f64;
-        let doc_len = self.reader.doc_len(doc_id) as f64;
-        let avg_doc_len = self.reader.avg_doc_len();
-
-        if avg_doc_len == 0.0 {
-            return 0.0;
-        }
-
-        let idf = ((n - df + 0.5) / (df + 0.5) + 1.0).ln();
-
-        let denom = tf + k1 * (1.0 - b + b * doc_len / avg_doc_len);
-
-        idf * (tf * (k1 + 1.0)) / denom
     }
 }
 
@@ -350,8 +321,8 @@ mod tests {
 
         let searcher = SegmentSearcher::new(&reader);
 
-        let score1 = searcher.bm25("rust", doc1, 1);
-        let score100 = searcher.bm25("rust", doc2, 100);
+        let score1 = searcher.scorer.score("rust", doc1, 1);
+        let score100 = searcher.scorer.score("rust", doc2, 100);
 
         assert!(score100 > score1);
 

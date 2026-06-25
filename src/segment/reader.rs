@@ -44,9 +44,19 @@ impl SegmentReader {
         let docs_bytes = fs::read(store.segment_docs_path(id))?;
         let terms_bytes = fs::read(store.segment_terms_path(id))?;
 
-        let docs: SegmentDocs = bincode::deserialize(&docs_bytes).expect("deserialize docs");
+        let docs: SegmentDocs = bincode::deserialize(&docs_bytes).map_err(|err| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("deserialize segment docs: {err}"),
+            )
+        })?;
 
-        let terms: SegmentTerms = bincode::deserialize(&terms_bytes).expect("deserialize terms");
+        let terms: SegmentTerms = bincode::deserialize(&terms_bytes).map_err(|err| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("deserialize segment terms: {err}"),
+            )
+        })?;
 
         let terms = terms
             .terms
@@ -86,7 +96,12 @@ impl SegmentReader {
         let mut buf = vec![0u8; entry.len as usize];
         file.read_exact(&mut buf)?;
 
-        let postings: TermPostings = bincode::deserialize(&buf).expect("deserialize term postings");
+        let postings: TermPostings = bincode::deserialize(&buf).map_err(|err| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("deserialize term postings: {err}"),
+            )
+        })?;
 
         Ok(Some(postings.docs.into_iter().collect()))
     }
@@ -104,13 +119,7 @@ impl SegmentReader {
     }
 
     pub fn document_frequency(&self, term: &str) -> usize {
-        self.terms
-            .get(term)
-            .map(|entry| {
-                let postings = self.lookup(&entry.term).ok().flatten();
-                postings.map(|p| p.len()).unwrap_or(0)
-            })
-            .unwrap_or(0)
+        self.term_df(term).unwrap_or(0)
     }
 
     pub fn term_df(&self, term: &str) -> Option<usize> {
