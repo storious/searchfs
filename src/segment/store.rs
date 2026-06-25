@@ -1,51 +1,59 @@
-use crate::segment::format::{
-    DocMetaEntry, MANIFEST_VERSION, Manifest, SEGMENT_DOC_META_VERSION, SEGMENT_META_VERSION,
-    SEGMENT_TERMS_VERSION, Segment, SegmentDocMeta, SegmentDocs, SegmentMeta, SegmentTerms,
-    TermEntry, next_segment_id,
-};
 use std::collections::HashMap;
-use std::fs;
-use std::io::{self, Read, Seek, SeekFrom, Write};
+use std::io;
 use std::path::PathBuf;
 
 use crate::engine::SearchEngine;
 use crate::index::doctable::DocId;
 use crate::index::memindex::{InvertedIndex, Position};
 use crate::segment::codec::{CompressedPostingCodec, PostingCodec};
+use crate::segment::format::{
+    DocMetaEntry, MANIFEST_VERSION, Manifest, SEGMENT_DOC_META_VERSION, SEGMENT_META_VERSION,
+    SEGMENT_TERMS_VERSION, Segment, SegmentDocMeta, SegmentDocs, SegmentMeta, SegmentTerms,
+    TermEntry, next_segment_id,
+};
+use crate::storage::Storage;
+use crate::storage::local::LocalStorage;
 
-pub struct SegmentStore {
-    root: PathBuf,
+pub struct SegmentStore<S: Storage> {
+    storage: S,
     pub codec: Box<dyn PostingCodec>,
 }
 
-impl SegmentStore {
+impl SegmentStore<LocalStorage> {
     pub fn new(root: impl Into<PathBuf>) -> Self {
+        Self::with_storage(LocalStorage::new(root))
+    }
+}
+
+impl<S: Storage> SegmentStore<S> {
+    pub fn with_storage(storage: S) -> Self {
         Self {
-            root: root.into(),
+            storage,
             codec: Box::new(CompressedPostingCodec),
         }
     }
 
     pub fn init(&self) -> std::io::Result<()> {
-        fs::create_dir_all(self.segments_dir())
+        self.storage.create_dir_all(&self.segments_dir())
     }
 
     pub fn save_segment(&self, segment: &Segment) -> std::io::Result<()> {
         self.init()?;
-        fs::create_dir_all(self.segment_dir(&segment.id))?;
+        self.storage
+            .create_dir_all(&self.segment_dir(&segment.id))?;
 
         let docs = SegmentDocs {
             doctable: segment.doctable.clone(),
         };
 
-        fs::write(
-            self.segment_docs_path(&segment.id),
-            bincode::serialize(&docs).expect("serialize docs"),
+        self.storage.write(
+            &self.segment_docs_path(&segment.id),
+            &bincode::serialize(&docs).expect("serialize docs"),
         )?;
         let mut doc_lens: HashMap<DocId, usize> = HashMap::new();
 
         let mut entries = Vec::new();
-        let mut postings_file = fs::File::create(self.segment_postings_path(&segment.id))?;
+        let mut postings_bytes = Vec::new();
         let mut offset = 0u64;
 
         let mut term_count = 0usize;
@@ -78,7 +86,7 @@ impl SegmentStore {
 
             let bytes = self.codec.encode(&postings)?;
 
-            postings_file.write_all(&bytes)?;
+            postings_bytes.extend_from_slice(&bytes);
 
             entries.push(TermEntry {
                 term: term.clone(),
@@ -89,6 +97,9 @@ impl SegmentStore {
 
             offset += bytes.len() as u64;
         }
+
+        self.storage
+            .write(&self.segment_postings_path(&segment.id), &postings_bytes)?;
 
         let terms = SegmentTerms {
             version: SEGMENT_TERMS_VERSION,
@@ -119,27 +130,27 @@ impl SegmentStore {
             docs: docmeta_docs,
         };
 
-        fs::write(
-            self.segment_docmeta_path(&segment.id),
-            bincode::serialize(&docmeta).expect("serialize segment doc meta"),
+        self.storage.write(
+            &self.segment_docmeta_path(&segment.id),
+            &bincode::serialize(&docmeta).expect("serialize segment doc meta"),
         )?;
 
-        fs::write(
-            self.segment_terms_path(&segment.id),
-            bincode::serialize(&terms).expect("serialize terms"),
+        self.storage.write(
+            &self.segment_terms_path(&segment.id),
+            &bincode::serialize(&terms).expect("serialize terms"),
         )?;
 
-        fs::write(
-            self.segment_meta_path(&segment.id),
-            bincode::serialize(&meta).expect("serialize segment meta"),
+        self.storage.write(
+            &self.segment_meta_path(&segment.id),
+            &bincode::serialize(&meta).expect("serialize segment meta"),
         )?;
 
         Ok(())
     }
 
     pub fn load_segment(&self, id: &str) -> std::io::Result<Segment> {
-        let docs_bytes = fs::read(self.segment_docs_path(id))?;
-        let terms_bytes = fs::read(self.segment_terms_path(id))?;
+        let docs_bytes = self.storage.read(&self.segment_docs_path(id))?;
+        let terms_bytes = self.storage.read(&self.segment_terms_path(id))?;
 
         let docs: SegmentDocs = bincode::deserialize(&docs_bytes).map_err(|err| {
             io::Error::new(
@@ -155,16 +166,21 @@ impl SegmentStore {
             )
         })?;
 
-        let mut postings_file = fs::File::open(self.segment_postings_path(id))?;
+        let postings_bytes = self.storage.read(&self.segment_postings_path(id))?;
         let mut index = InvertedIndex::new();
 
         for entry in terms.terms {
-            postings_file.seek(SeekFrom::Start(entry.offset))?;
+            let start = entry.offset as usize;
+            let end = start + entry.len as usize;
 
-            let mut buf = vec![0u8; entry.len as usize];
-            postings_file.read_exact(&mut buf)?;
+            let Some(buf) = postings_bytes.get(start..end) else {
+                return Err(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    format!("posting slice out of bounds for term {}", entry.term),
+                ));
+            };
 
-            let map = self.codec.decode(&buf)?;
+            let map = self.codec.decode(buf)?;
 
             index.insert_postings(entry.term, map);
         }
@@ -177,7 +193,7 @@ impl SegmentStore {
     }
 
     pub fn load_segment_meta(&self, id: &str) -> io::Result<SegmentMeta> {
-        let bytes = fs::read(self.segment_meta_path(id))?;
+        let bytes = self.storage.read(&self.segment_meta_path(id))?;
         let meta: SegmentMeta = bincode::deserialize(&bytes).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -198,14 +214,14 @@ impl SegmentStore {
     pub fn save_manifest(&self, manifest: &Manifest) -> std::io::Result<()> {
         self.init()?;
 
-        fs::write(
-            self.manifest_path(),
-            bincode::serialize(manifest).expect("serialize manifest"),
+        self.storage.write(
+            &self.manifest_path(),
+            &bincode::serialize(manifest).expect("serialize manifest"),
         )
     }
 
     pub fn load_manifest(&self) -> std::io::Result<Manifest> {
-        let bytes = fs::read(self.manifest_path())?;
+        let bytes = self.storage.read(&self.manifest_path())?;
         let manifest = bincode::deserialize(&bytes).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -217,7 +233,7 @@ impl SegmentStore {
     }
 
     pub fn load_segment_docmeta(&self, id: &str) -> io::Result<SegmentDocMeta> {
-        let bytes = fs::read(self.segment_docmeta_path(id))?;
+        let bytes = self.storage.read(&self.segment_docmeta_path(id))?;
 
         let docmeta: SegmentDocMeta = bincode::deserialize(&bytes).map_err(|err| {
             io::Error::new(
@@ -236,28 +252,40 @@ impl SegmentStore {
         Ok(docmeta)
     }
 
-    pub(crate) fn segments_dir(&self) -> PathBuf {
-        self.root.join("segments")
+    pub(crate) fn remove_segment(&self, id: &str) -> io::Result<()> {
+        if self.segment_exists(id) {
+            self.storage.remove_dir_all(&self.segment_dir(id))?;
+        }
+
+        Ok(())
     }
 
-    pub(crate) fn segment_dir(&self, id: &str) -> PathBuf {
-        self.segments_dir().join(id)
+    pub(crate) fn segments_dir(&self) -> String {
+        "segments".to_string()
     }
 
-    pub(crate) fn segment_docs_path(&self, id: &str) -> PathBuf {
-        self.segment_dir(id).join("docs.bin")
+    pub(crate) fn segment_dir(&self, id: &str) -> String {
+        format!("segments/{id}")
     }
 
-    pub(crate) fn segment_terms_path(&self, id: &str) -> PathBuf {
-        self.segment_dir(id).join("terms.bin")
+    pub(crate) fn segment_docs_path(&self, id: &str) -> String {
+        format!("segments/{id}/docs.bin")
     }
 
-    pub(crate) fn segment_postings_path(&self, id: &str) -> PathBuf {
-        self.segment_dir(id).join("postings.bin")
+    pub(crate) fn segment_terms_path(&self, id: &str) -> String {
+        format!("segments/{id}/terms.bin")
     }
 
-    pub(crate) fn manifest_path(&self) -> PathBuf {
-        self.root.join("manifest.bin")
+    pub(crate) fn segment_postings_path(&self, id: &str) -> String {
+        format!("segments/{id}/postings.bin")
+    }
+
+    pub(crate) fn manifest_path(&self) -> String {
+        "manifest.bin".to_string()
+    }
+
+    pub(crate) fn segment_exists(&self, id: &str) -> bool {
+        self.storage.exists(&self.segment_dir(id))
     }
 
     pub fn merge_all_segments(&self) -> io::Result<String> {
@@ -296,23 +324,30 @@ impl SegmentStore {
 
         for old_id in old_segments {
             if old_id != new_id {
-                let old_dir = self.segment_dir(&old_id);
-
-                if old_dir.exists() {
-                    fs::remove_dir_all(old_dir)?;
-                }
+                self.remove_segment(&old_id)?;
             }
         }
-
         Ok(new_id)
     }
 
-    fn segment_meta_path(&self, id: &str) -> PathBuf {
-        self.segment_dir(id).join("meta.bin")
+    fn segment_meta_path(&self, id: &str) -> String {
+        format!("segments/{id}/meta.bin")
     }
 
-    fn segment_docmeta_path(&self, id: &str) -> PathBuf {
-        self.segment_dir(id).join("docmeta.bin")
+    fn segment_docmeta_path(&self, id: &str) -> String {
+        format!("segments/{id}/docmeta.bin")
+    }
+
+    pub(crate) fn read_segment_docs_bytes(&self, id: &str) -> io::Result<Vec<u8>> {
+        self.storage.read(&self.segment_docs_path(id))
+    }
+
+    pub(crate) fn read_segment_terms_bytes(&self, id: &str) -> io::Result<Vec<u8>> {
+        self.storage.read(&self.segment_terms_path(id))
+    }
+
+    pub(crate) fn read_segment_postings_bytes(&self, id: &str) -> io::Result<Vec<u8>> {
+        self.storage.read(&self.segment_postings_path(id))
     }
 }
 
@@ -465,9 +500,9 @@ mod tests {
         paths.sort();
 
         assert_eq!(paths, vec!["a.txt", "b.txt"]);
-        assert!(!store.segment_dir("seg_000001").exists());
-        assert!(!store.segment_dir("seg_000002").exists());
-        assert!(store.segment_dir("seg_000003").exists());
+        assert!(!store.segment_exists("seg_000001"));
+        assert!(!store.segment_exists("seg_000002"));
+        assert!(store.segment_exists("seg_000003"));
     }
 
     #[test]

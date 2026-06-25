@@ -1,8 +1,5 @@
 use std::collections::HashMap;
-use std::fs;
 use std::io;
-use std::io::{Read, Seek, SeekFrom};
-use std::path::PathBuf;
 
 use crate::index::doctable::{DocId, DocTable};
 use crate::index::memindex::Position;
@@ -10,12 +7,13 @@ use crate::segment::codec::PostingCodec;
 use crate::segment::format::{SegmentDocs, SegmentMeta, SegmentTerms, TermEntry};
 use crate::segment::posting::PostingIterator;
 use crate::segment::store::SegmentStore;
+use crate::storage::Storage;
 
 pub struct SegmentReader {
     id: String,
     docs: DocTable,
     terms: HashMap<String, TermEntry>,
-    postings_path: PathBuf,
+    postings_bytes: Vec<u8>,
     meta: SegmentMeta,
     doc_lens: HashMap<DocId, usize>,
     pub codec: Box<dyn PostingCodec>,
@@ -26,7 +24,7 @@ pub struct SegmentReaderCache {
 }
 
 impl SegmentReaderCache {
-    pub fn open(store: &SegmentStore) -> std::io::Result<Self> {
+    pub fn open<S: Storage>(store: &SegmentStore<S>) -> std::io::Result<Self> {
         let manifest = store.load_manifest()?;
 
         let mut readers = Vec::new();
@@ -52,20 +50,21 @@ impl SegmentReader {
         Ok(Some(PostingIterator::from_postings(postings)))
     }
 
-    pub fn open(store: &SegmentStore, id: &str) -> std::io::Result<Self> {
-        let docs_bytes = fs::read(store.segment_docs_path(id))?;
-        let terms_bytes = fs::read(store.segment_terms_path(id))?;
+    pub fn open<S: Storage>(store: &SegmentStore<S>, id: &str) -> std::io::Result<Self> {
+        let docs_bytes = store.read_segment_docs_bytes(id)?;
+        let terms_bytes = store.read_segment_terms_bytes(id)?;
+        let postings_bytes = store.read_segment_postings_bytes(id)?;
 
         let docs: SegmentDocs = bincode::deserialize(&docs_bytes).map_err(|err| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
+            io::Error::new(
+                io::ErrorKind::InvalidData,
                 format!("deserialize segment docs: {err}"),
             )
         })?;
 
         let terms: SegmentTerms = bincode::deserialize(&terms_bytes).map_err(|err| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
+            io::Error::new(
+                io::ErrorKind::InvalidData,
                 format!("deserialize segment terms: {err}"),
             )
         })?;
@@ -77,7 +76,6 @@ impl SegmentReader {
             .collect();
 
         let meta = store.load_segment_meta(id)?;
-
         let docmeta = store.load_segment_docmeta(id)?;
 
         let doc_lens = docmeta
@@ -90,7 +88,7 @@ impl SegmentReader {
             id: id.to_string(),
             docs: docs.doctable,
             terms,
-            postings_path: store.segment_postings_path(id),
+            postings_bytes,
             meta,
             doc_lens,
             codec: store.codec.clone_box(),
@@ -102,14 +100,17 @@ impl SegmentReader {
             return Ok(None);
         };
 
-        let mut file = fs::File::open(&self.postings_path)?;
+        let start = entry.offset as usize;
+        let end = start + entry.len as usize;
 
-        file.seek(SeekFrom::Start(entry.offset))?;
+        let Some(buf) = self.postings_bytes.get(start..end) else {
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                format!("posting slice out of bounds for term {}", entry.term),
+            ));
+        };
 
-        let mut buf = vec![0u8; entry.len as usize];
-        file.read_exact(&mut buf)?;
-
-        let postings = self.codec.decode(&buf)?;
+        let postings = self.codec.decode(buf)?;
 
         Ok(Some(postings))
     }
