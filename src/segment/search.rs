@@ -1,5 +1,6 @@
 use crate::index::doctable::DocId;
 use crate::query::{Collector, SearchResult, TopKCollector};
+use crate::segment::planner::QueryPlan;
 use crate::segment::reader::SegmentReader;
 use crate::segment::scorer::Bm25Scorer;
 
@@ -28,31 +29,44 @@ impl<'a> SegmentSearcher<'a> {
             return Ok(());
         }
 
-        let mut ordered_terms: Vec<&String> = terms.iter().collect();
-        ordered_terms.sort_by_key(|term| self.reader.term_df(term).unwrap_or(usize::MAX));
+        let plan = QueryPlan::for_all_terms(self.reader, terms);
 
-        let first_term = ordered_terms[0];
-
-        let Some(first_postings) = self.reader.lookup(first_term)? else {
+        let Some(first_term) = plan.first_term() else {
             return Ok(());
         };
 
-        let mut other_postings = Vec::new();
+        let Some(mut first_iter) = self.reader.posting_iter(first_term)? else {
+            return Ok(());
+        };
 
-        for term in ordered_terms.iter().skip(1) {
-            let Some(postings) = self.reader.lookup(term)? else {
+        let mut other_iters = Vec::new();
+
+        for term in plan.remaining_terms() {
+            let Some(iter) = self.reader.posting_iter(term)? else {
                 return Ok(());
             };
 
-            other_postings.push((*term, postings));
+            other_iters.push((*term, iter));
         }
 
-        for (&doc_id, first_positions) in &first_postings {
+        while let Some((doc_id, first_positions)) = first_iter.current() {
             let mut score = self.scorer.score(first_term, doc_id, first_positions.len());
             let mut matched = true;
 
-            for (term, postings) in &other_postings {
-                let Some(positions) = postings.get(&doc_id) else {
+            for (term, iter) in &mut other_iters {
+                iter.advance_to(doc_id);
+
+                let Some(other_doc_id) = iter.current_doc() else {
+                    matched = false;
+                    break;
+                };
+
+                if other_doc_id != doc_id {
+                    matched = false;
+                    break;
+                }
+
+                let Some(positions) = iter.current_positions() else {
                     matched = false;
                     break;
                 };
@@ -60,19 +74,15 @@ impl<'a> SegmentSearcher<'a> {
                 score += self.scorer.score(term, doc_id, positions.len());
             }
 
-            if !matched {
-                continue;
+            if matched && let Some(path) = self.reader.doc_path(doc_id) {
+                collector.collect(SearchResult {
+                    doc_id,
+                    path: path.to_string(),
+                    score,
+                });
             }
 
-            let Some(path) = self.reader.doc_path(doc_id) else {
-                continue;
-            };
-
-            collector.collect(SearchResult {
-                doc_id,
-                path: path.to_string(),
-                score,
-            });
+            first_iter.advance();
         }
 
         Ok(())

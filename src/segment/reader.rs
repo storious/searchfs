@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 use std::fs;
+use std::io;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
 
 use crate::index::doctable::{DocId, DocTable};
 use crate::index::memindex::Position;
 use crate::segment::format::{SegmentDocs, SegmentMeta, SegmentTerms, TermEntry, TermPostings};
+use crate::segment::posting::PostingIterator;
 use crate::segment::store::SegmentStore;
 
 pub struct SegmentReader {
@@ -40,6 +42,14 @@ impl SegmentReaderCache {
 }
 
 impl SegmentReader {
+    pub fn posting_iter(&self, term: &str) -> io::Result<Option<PostingIterator>> {
+        let Some(postings) = self.lookup(term)? else {
+            return Ok(None);
+        };
+
+        Ok(Some(PostingIterator::from_postings(postings)))
+    }
+
     pub fn open(store: &SegmentStore, id: &str) -> std::io::Result<Self> {
         let docs_bytes = fs::read(store.segment_docs_path(id))?;
         let terms_bytes = fs::read(store.segment_terms_path(id))?;
