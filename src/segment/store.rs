@@ -128,9 +128,19 @@ impl SegmentStore {
         let docs_bytes = fs::read(self.segment_docs_path(id))?;
         let terms_bytes = fs::read(self.segment_terms_path(id))?;
 
-        let docs: SegmentDocs = bincode::deserialize(&docs_bytes).expect("deserialize docs");
+        let docs: SegmentDocs = bincode::deserialize(&docs_bytes).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("deserialize segment docs: {err}"),
+            )
+        })?;
 
-        let terms: SegmentTerms = bincode::deserialize(&terms_bytes).expect("deserialize terms");
+        let terms: SegmentTerms = bincode::deserialize(&terms_bytes).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("deserialize segment terms: {err}"),
+            )
+        })?;
 
         let mut postings_file = fs::File::open(self.segment_postings_path(id))?;
         let mut index = InvertedIndex::new();
@@ -141,8 +151,12 @@ impl SegmentStore {
             let mut buf = vec![0u8; entry.len as usize];
             postings_file.read_exact(&mut buf)?;
 
-            let postings: TermPostings =
-                bincode::deserialize(&buf).expect("deserialize term postings");
+            let postings: TermPostings = bincode::deserialize(&buf).map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("deserialize terms postings: {err}"),
+                )
+            })?;
 
             let map = postings.docs.into_iter().collect();
 
@@ -158,7 +172,12 @@ impl SegmentStore {
 
     pub fn load_segment_meta(&self, id: &str) -> io::Result<SegmentMeta> {
         let bytes = fs::read(self.segment_meta_path(id))?;
-        let meta: SegmentMeta = bincode::deserialize(&bytes).expect("deserialize segment meta");
+        let meta: SegmentMeta = bincode::deserialize(&bytes).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("deserialize segment meta: {err}"),
+            )
+        })?;
 
         if meta.version != SEGMENT_META_VERSION {
             return Err(io::Error::new(
@@ -181,7 +200,12 @@ impl SegmentStore {
 
     pub fn load_manifest(&self) -> std::io::Result<Manifest> {
         let bytes = fs::read(self.manifest_path())?;
-        let manifest = bincode::deserialize(&bytes).expect("deserialize manifest");
+        let manifest = bincode::deserialize(&bytes).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("deserialize manifest: {err}"),
+            )
+        })?;
 
         Ok(manifest)
     }
@@ -189,8 +213,12 @@ impl SegmentStore {
     pub fn load_segment_docmeta(&self, id: &str) -> io::Result<SegmentDocMeta> {
         let bytes = fs::read(self.segment_docmeta_path(id))?;
 
-        let docmeta: SegmentDocMeta =
-            bincode::deserialize(&bytes).expect("deserialize segment doc meta");
+        let docmeta: SegmentDocMeta = bincode::deserialize(&bytes).map_err(|err| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("deserialize segment doc meta: {err}"),
+            )
+        })?;
 
         if docmeta.version != SEGMENT_DOC_META_VERSION {
             return Err(io::Error::new(
