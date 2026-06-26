@@ -2,7 +2,11 @@
 
 > Learn search engines, distributed storage systems, and systems programming by building them from scratch.
 
+![Purpose](https://img.shields.io/badge/purpose-learning-blue)
 ![CI](https://github.com/storious/systemlab/actions/workflows/ci.yaml/badge.svg)
+![Rust](https://img.shields.io/badge/Rust-1.96+-orange)
+![Go](https://img.shields.io/badge/Go-1.24+-00ADD8)
+![License](https://img.shields.io/github/license/storious/systemlab)
 
 ## Overview
 
