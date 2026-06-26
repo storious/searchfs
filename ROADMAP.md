@@ -49,46 +49,46 @@ SearchFS is a learning project that incrementally implements the core building b
 
 ## v0.5.x — Storage & Execution
 
-* ✓ Storage abstraction
-* ✓ Local filesystem backend
-* ✓ In-memory storage backend
-* ✓ Segment reader cache
-* ✓ Parallel segment search
-* ✓ REPL improvements
-* □ Memory-mapped local storage
-* □ Background merge scheduler
+- ✓ Storage abstraction
+- ✓ Local filesystem backend
+- ✓ In-memory storage backend
+- ✓ Segment reader cache
+- ✓ Parallel segment search
+- ✓ REPL improvements
+- ✓ Memory-mapped local storage
+- ✓ Background merge scheduler
 
 ---
 
 ## v0.6.x — Search Engine
 
-* Global search statistics
-* Global BM25 scoring
-* Query planner cache
-* Parallel Top-K reduction
-* Segment cache
-* Query profiling
-* Search metrics
-* Benchmark suite
+- Global search statistics
+- Global BM25 scoring
+- Query planner cache
+- Parallel Top-K reduction
+- Segment cache
+- Query profiling
+- Search metrics
+- Benchmark suite
 
 ---
 
 ## v0.7.x — Search Service
 
-* HTTP API
-* REST search service
-* JSON responses
-* Concurrent query execution
-* Request tracing
-* Configuration management
+- HTTP API
+- REST search service
+- JSON responses
+- Concurrent query execution
+- Configuration management
+- Request tracing
 
 ---
 
 ## v0.8.x — Distributed Search
 
-* Metadata service
-* Sharding
-* Replication
-* Distributed query execution
-* Cluster management
+- Metadata service
+- Sharding
+- Replication
+- Distributed query execution
+- Cluster management
 

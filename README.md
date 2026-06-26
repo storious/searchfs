@@ -1,7 +1,7 @@
 # SearchFS
 
-> A toy search engine written in Rust, evolving from an in-memory inverted index
-> into a modern segment-based search engine inspired by Lucene and Tantivy.
+> A modular search engine written in Rust, built from first principles and
+> inspired by Lucene and Tantivy.
 
 ![CI](https://github.com/storious/searchfs/actions/workflows/ci.yaml/badge.svg)
 
@@ -15,22 +15,23 @@ posting list compression, query planning, and parallel segment search.
 
 Current capabilities include:
 
-* In-memory inverted index
-* Snapshot persistence
-* Incremental indexing
-* Immutable segment architecture
-* Multi-segment search
-* Parallel segment search
-* Segment merge / compaction
-* BM25 ranking
-* Posting list compression
-* Query planner
-* Top-K collector
-* Interactive search REPL
-* Segment inspection utilities
-* Pluggable storage backend
-* Pluggable posting codec
-
+- In-memory inverted index
+- Snapshot persistence
+- Incremental indexing
+- Immutable segment architecture
+- Multi-segment search
+- Parallel segment search
+- Automatic segment merge scheduling
+- Segment merge / compaction
+- BM25 ranking
+- Posting list compression
+- Query planner
+- Top-K collector
+- Interactive search REPL
+- Segment inspection utilities
+- Pluggable storage backend
+- Pluggable posting codec
+- Memory-mapped local storage
 ---
 
 ## Build
@@ -146,37 +147,37 @@ make clean
 ## Architecture
 
 ```text
-                 Query
+                     CLI / REPL
 
-                   │
+                         │
 
-             Query Planner
+                  Query Planner
 
-                   │
+                         │
 
-           Segment Searcher
+                 Segment Searcher
 
-                   │
+                         │
 
-         Segment Reader Cache
+               Segment Reader Cache
 
-                   │
+                         │
 
-            Segment Reader
+                  Segment Reader
 
-                   │
+                         │
 
-             Segment Store
+                   Segment Store
 
-                   │
+                  ┌──────┴──────┐
 
-      Storage      +      Codec
+               Storage        Codec
 
-       │                      │
+          ┌────────────┐    ┌────────────────────┐
 
- LocalStorage         PostingCodec
+      LocalStorage      PostingCodec
 
- MemoryStorage      CompressedCodec
+      MemoryStorage     CompressedPostingCodec
 ```
 
 ---
@@ -200,3 +201,13 @@ src/
 
 See [ROADMAP.md](ROADMAP.md).
 
+
+## Release History
+
+| Version | Highlights |
+|---------|------------|
+| v0.1 | In-memory inverted index |
+| v0.2 | Snapshot persistence |
+| v0.3 | Immutable segment architecture |
+| v0.4 | Query engine and posting compression |
+| v0.5 | Storage abstraction, parallel search, merge scheduler |
