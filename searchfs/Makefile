@@ -1,7 +1,7 @@
 .PHONY: all build index rebuild search test fmt lint clean
 
 INDEX := searchfs.idx
-DOCS  := docs
+DOCS  := testdata
 
 all: test build
 

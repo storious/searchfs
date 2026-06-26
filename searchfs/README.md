@@ -3,7 +3,6 @@
 > A modular search engine written in Rust, built from first principles and
 > inspired by Lucene and Tantivy.
 
-![CI](https://github.com/storious/searchfs/actions/workflows/ci.yaml/badge.svg)
 
 SearchFS is a learning project that incrementally implements the core building
 blocks of a modern search engine, including immutable segments, BM25 ranking,
