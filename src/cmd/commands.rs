@@ -10,6 +10,7 @@ use crate::query::{QueryMode, parse_query_mode};
 use crate::segment::format::{
     MANIFEST_VERSION, Manifest, SEGMENT_META_VERSION, SegmentMeta, next_segment_id,
 };
+use crate::segment::merge_scheduler::MergeScheduler;
 use crate::segment::store::SegmentStore;
 use crate::snapshot;
 
@@ -151,7 +152,7 @@ pub(crate) fn run_search_segments(
 pub(crate) fn run_update_segment(index_dir: &str, docs: &str) -> io::Result<()> {
     let store = SegmentStore::new(index_dir);
 
-    let mut manifest = store.load_manifest()?;
+    let manifest = store.load_manifest()?;
     let segment_id = next_segment_id(&manifest);
 
     let mut engine = SearchEngine::new();
@@ -174,10 +175,26 @@ pub(crate) fn run_update_segment(index_dir: &str, docs: &str) -> io::Result<()> 
     let segment = engine.into_segment(segment_id.clone());
     store.save_segment(&segment)?;
 
-    manifest.segments.push(segment_id.clone());
-    store.save_manifest(&manifest)?;
+    let mut segments = manifest.segments;
+    segments.push(segment_id.clone());
+
+    store.save_manifest(&Manifest {
+        version: MANIFEST_VERSION,
+        segments,
+    })?;
 
     eprintln!("added segment={segment_id}");
+
+    let scheduler = MergeScheduler::default();
+    let manifest = store.load_manifest()?;
+
+    if scheduler.should_merge(manifest.segments.len()) {
+        let merged_id = store.merge_all_segments()?;
+        eprintln!(
+            "auto_merged segment={merged_id} reason=segment_count>{}",
+            scheduler.max_segments()
+        );
+    }
 
     Ok(())
 }
@@ -266,7 +283,14 @@ pub(crate) fn run_inspect_segments(index_dir: &str) -> io::Result<()> {
 
     for segment_id in &manifest.segments {
         let start = Instant::now();
-        let meta = store.load_segment_meta(segment_id)?;
+
+        let meta = store.load_segment_meta(segment_id).map_err(|err| {
+            io::Error::new(
+                err.kind(),
+                format!("load meta for segment {segment_id}: {err}"),
+            )
+        })?;
+
         let elapsed = start.elapsed();
 
         total.accumulate(&meta);

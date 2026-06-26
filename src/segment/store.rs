@@ -611,4 +611,14 @@ mod tests {
 
         assert_eq!(restored.id, "seg_000001");
     }
+
+    #[test]
+    fn merge_scheduler_can_trigger_segment_merge() {
+        use crate::segment::merge_scheduler::MergeScheduler;
+
+        let scheduler = MergeScheduler::new(2);
+
+        assert!(!scheduler.should_merge(2));
+        assert!(scheduler.should_merge(3));
+    }
 }

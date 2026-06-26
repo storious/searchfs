@@ -1,5 +1,6 @@
 pub mod codec;
 pub mod format;
+pub mod merge_scheduler;
 pub mod planner;
 pub mod posting;
 pub mod reader;

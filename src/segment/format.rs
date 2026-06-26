@@ -119,7 +119,16 @@ pub struct SegmentDocMeta {
 }
 
 pub fn next_segment_id(manifest: &Manifest) -> String {
-    format!("seg_{:06}", manifest.segments.len() + 1)
+    let next = manifest
+        .segments
+        .iter()
+        .filter_map(|id| id.strip_prefix("seg_"))
+        .filter_map(|suffix| suffix.parse::<usize>().ok())
+        .max()
+        .unwrap_or(0)
+        + 1;
+
+    format!("seg_{next:06}")
 }
 
 #[cfg(test)]
@@ -127,12 +136,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn next_segment_id_uses_manifest_len() {
+    fn next_segment_id_uses_max_existing_segment_id() {
         let manifest = Manifest {
             version: MANIFEST_VERSION,
-            segments: vec!["seg_000001".to_string(), "seg_000002".to_string()],
+            segments: vec!["seg_000010".to_string(), "seg_000002".to_string()],
         };
 
-        assert_eq!(next_segment_id(&manifest), "seg_000003");
+        assert_eq!(next_segment_id(&manifest), "seg_000011");
     }
 }
