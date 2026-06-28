@@ -65,3 +65,32 @@ jobs:
 
       - name: Build
         run: make build
+
+  zigkv:
+    name: ZigKV / Zig
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: zigkv
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Format
+        run: zig fmt --check build.zig src/*.zig
+
+      - name: Lint
+        run: make lint
+
+      - name: Tests
+        run: make test
+
+      - name: Build
+        run: make build

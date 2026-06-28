@@ -1,27 +1,76 @@
-.PHONY: test build fmt clean searchfs-test gdfs-test
+.PHONY: \
+	all check \
+	build test fmt lint clean \
+	searchfs-build searchfs-test searchfs-fmt searchfs-lint \
+	gdfs-build gdfs-test gdfs-fmt gdfs-lint \
+	zigkv-build zigkv-test zigkv-fmt zigkv-lint
 
-test: searchfs-test gdfs-test
+all: build
 
-build:
-	$(MAKE) -C searchfs build
-	$(MAKE) -C gdfs build
+check: fmt lint test
 
-lint:
-	$(MAKE) -C searchfs lint
-	$(MAKE) -C gdfs lint
+#
+# All projects
+#
 
-searchfs-build:
-	$(MAKE) -C searchfs build
+build: searchfs-build gdfs-build zigkv-build
 
-gdfs-build:
-	$(MAKE) -C gdfs build
+test: searchfs-test gdfs-test zigkv-test
 
-searchfs-test:
-	$(MAKE) -C searchfs test
+fmt: searchfs-fmt gdfs-fmt zigkv-fmt
 
-gdfs-test:
-	$(MAKE) -C gdfs test
+lint: searchfs-lint gdfs-lint zigkv-lint
 
 clean:
 	$(MAKE) -C searchfs clean
 	$(MAKE) -C gdfs clean
+	$(MAKE) -C zigkv clean
+
+#
+# SearchFS
+#
+
+searchfs-build:
+	$(MAKE) -C searchfs build
+
+searchfs-test:
+	$(MAKE) -C searchfs test
+
+searchfs-fmt:
+	$(MAKE) -C searchfs fmt
+
+searchfs-lint:
+	$(MAKE) -C searchfs lint
+
+#
+# GDFS
+#
+
+gdfs-build:
+	$(MAKE) -C gdfs build
+
+gdfs-test:
+	$(MAKE) -C gdfs test
+
+gdfs-fmt:
+	$(MAKE) -C gdfs fmt
+
+gdfs-lint:
+	$(MAKE) -C gdfs lint
+
+#
+# ZigKV
+#
+
+zigkv-build:
+	$(MAKE) -C zigkv build
+
+zigkv-test:
+	$(MAKE) -C zigkv test
+
+zigkv-fmt:
+	$(MAKE) -C zigkv fmt
+
+zigkv-lint:
+	$(MAKE) -C zigkv lint
+
