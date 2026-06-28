@@ -1,0 +1,45 @@
+package namenode
+
+import (
+	"context"
+	"net/http/httptest"
+	"testing"
+
+	"gdfs/internal/datanode"
+
+	"github.com/stretchr/testify/require"
+)
+
+func TestHTTPClientPutGetDeleteFile(t *testing.T) {
+	node, err := NewNameNode(NewMetadataStore())
+	require.NoError(t, err)
+
+	server := httptest.NewServer(NewHTTPServer(node))
+	defer server.Close()
+
+	client := NewHTTPClient(server.URL)
+	ctx := context.Background()
+
+	meta := FileMetadata{
+		Path: "/docs/hello.txt",
+		Size: 11,
+		Blocks: []datanode.BlockInfo{
+			{ID: "block-001", Size: 5, Checksum: "a"},
+			{ID: "block-002", Size: 6, Checksum: "b"},
+		},
+	}
+
+	created, err := client.PutFile(ctx, meta)
+	require.NoError(t, err)
+	require.Equal(t, meta, created)
+
+	got, err := client.GetFile(ctx, "/docs/hello.txt")
+	require.NoError(t, err)
+	require.Equal(t, meta, got)
+
+	err = client.DeleteFile(ctx, "/docs/hello.txt")
+	require.NoError(t, err)
+
+	_, err = client.GetFile(ctx, "/docs/hello.txt")
+	require.Error(t, err)
+}
