@@ -205,3 +205,33 @@ func TestHTTPServerAllocateBlock(t *testing.T) {
 	require.Len(t, out.DataNodes, 1)
 	require.Equal(t, cluster.DataNodeID("node-2"), out.DataNodes[0].ID)
 }
+
+func TestHTTPServerListDataNodes(t *testing.T) {
+	node, err := NewNameNode(NewMetadataStore())
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	require.NoError(t, node.RegisterDataNode(ctx, cluster.DataNodeInfo{
+		ID:       "node-1",
+		Addr:     "http://localhost:9001",
+		Capacity: 1024,
+		Used:     128,
+	}))
+
+	server := httptest.NewServer(NewHTTPServer(node))
+	defer server.Close()
+
+	resp, err := http.Get(server.URL + "/datanodes")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var nodes []cluster.DataNodeInfo
+	err = json.NewDecoder(resp.Body).Decode(&nodes)
+	require.NoError(t, err)
+
+	require.Len(t, nodes, 1)
+	require.Equal(t, cluster.DataNodeID("node-1"), nodes[0].ID)
+}

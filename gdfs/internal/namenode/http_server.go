@@ -46,6 +46,17 @@ func (s *HTTPServer) routes() {
 	s.mux.HandleFunc("/files/", s.handleFile)
 	s.mux.HandleFunc("/blocks/allocate", s.handleAllocateBlock)
 	s.mux.HandleFunc("/heartbeat", s.handleHeartbeat)
+	s.mux.HandleFunc("/datanodes", s.handleDataNodes)
+}
+
+func (s *HTTPServer) handleDataNodes(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	nodes := s.node.ListDataNodes(r.Context())
+	writeJSON(w, http.StatusOK, nodes)
 }
 
 func (s *HTTPServer) handleHeartbeat(w http.ResponseWriter, r *http.Request) {

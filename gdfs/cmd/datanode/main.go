@@ -1,18 +1,23 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"net/http"
 
+	"gdfs/internal/cluster"
 	"gdfs/internal/datanode"
+	"gdfs/internal/namenode"
 )
 
 func main() {
 	var (
-		id   = flag.String("id", "node-1", "datanode id")
-		addr = flag.String("addr", ":9001", "listen address")
-		root = flag.String("root", "data/datanode", "storage root")
+		id           = flag.String("id", "node-1", "datanode id")
+		addr         = flag.String("addr", ":9001", "listen address")
+		root         = flag.String("root", "data/datanode", "storage root")
+		namenodeAddr = flag.String("namenode", "", "namenode address")
+		capacity     = flag.Uint64("capacity", 1024*1024*1024, "datanode capacity in bytes")
 	)
 	flag.Parse()
 
@@ -25,6 +30,20 @@ func main() {
 	)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if *namenodeAddr != "" {
+		metaClient := namenode.NewHTTPClient(*namenodeAddr)
+
+		err := metaClient.Heartbeat(context.Background(), cluster.Heartbeat{
+			ID:       cluster.DataNodeID(*id),
+			Addr:     "http://localhost" + *addr,
+			Capacity: *capacity,
+			Used:     0,
+		})
+		if err != nil {
+			log.Printf("heartbeat failed: %v", err)
+		}
 	}
 
 	server := datanode.NewHTTPServer(node)
