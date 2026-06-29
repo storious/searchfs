@@ -112,3 +112,13 @@ func (n *NameNode) AliveDataNodes(ctx context.Context) []cluster.DataNodeInfo {
 
 	return n.registry.AliveNodes()
 }
+
+func (n *NameNode) Heartbeat(ctx context.Context, hb cluster.Heartbeat) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	return n.registry.Heartbeat(hb)
+}
