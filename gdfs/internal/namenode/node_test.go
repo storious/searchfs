@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"gdfs/internal/cluster"
 	"gdfs/internal/datanode"
 
 	"github.com/stretchr/testify/require"
@@ -52,7 +53,7 @@ func TestNameNodeRegisterListUnregisterDataNode(t *testing.T) {
 
 	ctx := context.Background()
 
-	err = node.RegisterDataNode(ctx, DataNodeInfo{
+	err = node.RegisterDataNode(ctx, cluster.DataNodeInfo{
 		ID:       "node-1",
 		Addr:     "http://localhost:9001",
 		Capacity: 1024,
@@ -62,7 +63,7 @@ func TestNameNodeRegisterListUnregisterDataNode(t *testing.T) {
 
 	nodes := node.ListDataNodes(ctx)
 	require.Len(t, nodes, 1)
-	require.Equal(t, DataNodeID("node-1"), nodes[0].ID)
+	require.Equal(t, cluster.DataNodeID("node-1"), nodes[0].ID)
 
 	got, ok := node.GetDataNode(ctx, "node-1")
 	require.True(t, ok)

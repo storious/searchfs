@@ -1,4 +1,4 @@
-package namenode
+package cluster
 
 import (
 	"testing"

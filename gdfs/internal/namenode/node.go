@@ -3,11 +3,13 @@ package namenode
 import (
 	"context"
 	"errors"
+
+	"gdfs/internal/cluster"
 )
 
 type NameNode struct {
 	store    *MetadataStore
-	registry *Registry
+	registry *cluster.Registry
 }
 
 func NewNameNode(store *MetadataStore) (*NameNode, error) {
@@ -17,7 +19,7 @@ func NewNameNode(store *MetadataStore) (*NameNode, error) {
 
 	return &NameNode{
 		store:    store,
-		registry: NewRegistry(),
+		registry: cluster.NewRegistry(),
 	}, nil
 }
 
@@ -61,7 +63,7 @@ func (n *NameNode) ExistsFile(ctx context.Context, path FilePath) bool {
 	return n.store.Exists(path)
 }
 
-func (n *NameNode) RegisterDataNode(ctx context.Context, info DataNodeInfo) error {
+func (n *NameNode) RegisterDataNode(ctx context.Context, info cluster.DataNodeInfo) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -71,17 +73,17 @@ func (n *NameNode) RegisterDataNode(ctx context.Context, info DataNodeInfo) erro
 	return n.registry.Register(info)
 }
 
-func (n *NameNode) GetDataNode(ctx context.Context, id DataNodeID) (DataNodeInfo, bool) {
+func (n *NameNode) GetDataNode(ctx context.Context, id cluster.DataNodeID) (cluster.DataNodeInfo, bool) {
 	select {
 	case <-ctx.Done():
-		return DataNodeInfo{}, false
+		return cluster.DataNodeInfo{}, false
 	default:
 	}
 
 	return n.registry.Get(id)
 }
 
-func (n *NameNode) ListDataNodes(ctx context.Context) []DataNodeInfo {
+func (n *NameNode) ListDataNodes(ctx context.Context) []cluster.DataNodeInfo {
 	select {
 	case <-ctx.Done():
 		return nil
@@ -91,7 +93,7 @@ func (n *NameNode) ListDataNodes(ctx context.Context) []DataNodeInfo {
 	return n.registry.List()
 }
 
-func (n *NameNode) UnregisterDataNode(ctx context.Context, id DataNodeID) {
+func (n *NameNode) UnregisterDataNode(ctx context.Context, id cluster.DataNodeID) {
 	select {
 	case <-ctx.Done():
 		return
