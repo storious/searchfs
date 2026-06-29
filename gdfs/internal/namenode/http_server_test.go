@@ -2,12 +2,14 @@ package namenode
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"gdfs/internal/cluster"
 	"gdfs/internal/datanode"
 
 	"github.com/stretchr/testify/require"
@@ -137,4 +139,52 @@ func mustRequest(t *testing.T, method, url string, body io.Reader) *http.Request
 	req, err := http.NewRequest(method, url, body)
 	require.NoError(t, err)
 	return req
+}
+
+func TestHTTPServerAllocateBlock(t *testing.T) {
+	node, err := NewNameNode(NewMetadataStore())
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	require.NoError(t, node.RegisterDataNode(ctx, cluster.DataNodeInfo{
+		ID:       "node-1",
+		Addr:     "http://localhost:9001",
+		Capacity: 1000,
+		Used:     900,
+	}))
+
+	require.NoError(t, node.RegisterDataNode(ctx, cluster.DataNodeInfo{
+		ID:       "node-2",
+		Addr:     "http://localhost:9002",
+		Capacity: 1000,
+		Used:     100,
+	}))
+
+	server := httptest.NewServer(NewHTTPServer(node))
+	defer server.Close()
+
+	body, err := json.Marshal(AllocateBlockRequest{
+		BlockSize: 100,
+		Replicas:  1,
+	})
+	require.NoError(t, err)
+
+	resp, err := http.DefaultClient.Do(mustRequest(
+		t,
+		http.MethodPost,
+		server.URL+"/blocks/allocate",
+		bytes.NewReader(body),
+	))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var out AllocateBlockResponse
+	err = json.NewDecoder(resp.Body).Decode(&out)
+	require.NoError(t, err)
+
+	require.Len(t, out.DataNodes, 1)
+	require.Equal(t, cluster.DataNodeID("node-2"), out.DataNodes[0].ID)
 }

@@ -4,11 +4,22 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+
+	"gdfs/internal/cluster"
 )
 
 type HTTPServer struct {
 	node *NameNode
 	mux  *http.ServeMux
+}
+
+type AllocateBlockRequest struct {
+	BlockSize uint64 `json:"block_size"`
+	Replicas  int    `json:"replicas"`
+}
+
+type AllocateBlockResponse struct {
+	DataNodes []cluster.DataNodeInfo `json:"datanodes"`
 }
 
 func NewHTTPServer(node *NameNode) *HTTPServer {
@@ -26,6 +37,7 @@ func (s *HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *HTTPServer) routes() {
 	s.mux.HandleFunc("/files/", s.handleFile)
+	s.mux.HandleFunc("/blocks/allocate", s.handleAllocateBlock)
 }
 
 func (s *HTTPServer) handleFile(w http.ResponseWriter, r *http.Request) {
@@ -87,4 +99,27 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+func (s *HTTPServer) handleAllocateBlock(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req AllocateBlockRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	nodes, err := s.node.AllocateBlock(r.Context(), req.BlockSize, req.Replicas)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, AllocateBlockResponse{
+		DataNodes: nodes,
+	})
 }
