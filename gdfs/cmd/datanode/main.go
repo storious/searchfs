@@ -18,7 +18,6 @@ func main() {
 		addr         = flag.String("addr", ":9001", "listen address")
 		root         = flag.String("root", "data/datanode", "storage root")
 		namenodeAddr = flag.String("namenode", "", "namenode address")
-		capacity     = flag.Uint64("capacity", 1024*1024*1024, "datanode capacity in bytes")
 	)
 	flag.Parse()
 
@@ -36,14 +35,15 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	hb := cluster.Heartbeat{
-		ID:       cluster.DataNodeID(*id),
-		Addr:     "http://localhost" + *addr,
-		Capacity: *capacity,
-		Used:     0,
-	}
+	registryAddr := "http://localhost" + *addr
 
-	startHeartbeat(ctx, *namenodeAddr, hb, 5*time.Second)
+	startHeartbeat(
+		ctx,
+		*namenodeAddr,
+		node,
+		registryAddr,
+		5*time.Second,
+	)
 
 	server := datanode.NewHTTPServer(node)
 
@@ -53,8 +53,13 @@ func main() {
 		log.Fatal(err)
 	}
 }
-
-func startHeartbeat(ctx context.Context, namenodeAddr string, hb cluster.Heartbeat, interval time.Duration) {
+func startHeartbeat(
+	ctx context.Context,
+	namenodeAddr string,
+	node *datanode.DataNode,
+	addr string,
+	interval time.Duration,
+) {
 	if namenodeAddr == "" {
 		return
 	}
@@ -66,11 +71,24 @@ func startHeartbeat(ctx context.Context, namenodeAddr string, hb cluster.Heartbe
 		defer ticker.Stop()
 
 		send := func() {
-			if err := client.Heartbeat(ctx, hb); err != nil {
+			stats, err := node.Stats()
+			if err != nil {
+				log.Printf("collect stats failed: %v", err)
+				return
+			}
+
+			err = client.Heartbeat(ctx, cluster.Heartbeat{
+				ID:       cluster.DataNodeID(node.ID),
+				Addr:     addr,
+				Capacity: stats.Capacity,
+				Used:     stats.Used,
+			})
+			if err != nil {
 				log.Printf("heartbeat failed: %v", err)
 				return
 			}
-			log.Printf("heartbeat sent id=%s namenode=%s", hb.ID, namenodeAddr)
+
+			log.Printf("heartbeat sent id=%s used=%d capacity=%d", node.ID, stats.Used, stats.Capacity)
 		}
 
 		send()

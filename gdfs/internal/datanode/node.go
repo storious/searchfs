@@ -47,3 +47,7 @@ func (n *DataNode) ExistsBlock(ctx context.Context, id BlockID) bool {
 func (n *DataNode) StatBlock(ctx context.Context, id BlockID) (BlockInfo, error) {
 	return n.Store.Stat(ctx, id)
 }
+
+func (n *DataNode) Stats() (StorageStats, error) {
+	return n.Store.Stats()
+}
