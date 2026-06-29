@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"net/http"
+	"time"
 
+	"gdfs/internal/cluster"
 	"gdfs/internal/namenode"
 )
 
@@ -18,6 +21,10 @@ func main() {
 	}
 
 	server := namenode.NewHTTPServer(node)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	node.StartHealthChecker(ctx, 5*time.Second, cluster.DefaultHealthConfig())
 
 	log.Printf("starting namenode addr=%s", *addr)
 
