@@ -11,4 +11,6 @@ var (
 	ErrInvalidReplicaCount   = errors.New("invalid replica count")
 	ErrNilBlockClientFactory = errors.New("nil block client factory")
 	ErrNoAllocatedDataNodes  = errors.New("no allocated datanodes")
+	ErrNoBlockReplicas       = errors.New("no block replicas")
+	ErrNoReadableReplicas    = errors.New("no readable replicas")
 )

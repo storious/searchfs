@@ -23,9 +23,8 @@ type DFSClient struct {
 	blockSize int64
 	replicas  int
 
-	defaultBlockAddr string
-	blocks           BlockClientFactory
-	metadata         MetadataClient
+	blocks   BlockClientFactory
+	metadata MetadataClient
 }
 
 type BlockClient interface {
@@ -33,7 +32,7 @@ type BlockClient interface {
 	BlockReader
 }
 
-func NewDFSClient(blockSize int64, replicas int, defaultBlockAddr string, blocks BlockClientFactory, metadata MetadataClient) (*DFSClient, error) {
+func NewDFSClient(blockSize int64, replicas int, blocks BlockClientFactory, metadata MetadataClient) (*DFSClient, error) {
 	if blockSize <= 0 {
 		return nil, ErrInvalidBlockSize
 	}
@@ -48,11 +47,10 @@ func NewDFSClient(blockSize int64, replicas int, defaultBlockAddr string, blocks
 	}
 
 	return &DFSClient{
-		blockSize:        blockSize,
-		replicas:         replicas,
-		blocks:           blocks,
-		metadata:         metadata,
-		defaultBlockAddr: defaultBlockAddr,
+		blockSize: blockSize,
+		replicas:  replicas,
+		blocks:    blocks,
+		metadata:  metadata,
 	}, nil
 }
 
@@ -136,23 +134,66 @@ func (w *placementBlockWriter) PutBlock(ctx context.Context, id datanode.BlockID
 
 	return info, nil
 }
+
 func (c *DFSClient) GetFile(ctx context.Context, path namenode.FilePath, dst io.Writer) (int64, error) {
 	meta, err := c.metadata.GetFile(ctx, path)
 	if err != nil {
 		return 0, err
 	}
 
-	blockInfos := make([]datanode.BlockInfo, 0, len(meta.Blocks))
+	var total int64
+
 	for _, block := range meta.Blocks {
-		blockInfos = append(blockInfos, block.Info)
+		n, err := c.readBlockFromReplicas(ctx, block, dst)
+		total += n
+		if err != nil {
+			return total, err
+		}
 	}
 
-	reader, err := NewReader(c.blocks(c.defaultBlockAddr))
-	if err != nil {
-		return 0, err
+	return total, nil
+}
+
+func (c *DFSClient) readBlockFromReplicas(ctx context.Context, block namenode.BlockMetadata, dst io.Writer) (int64, error) {
+	if len(block.Replicas) == 0 {
+		return 0, ErrNoBlockReplicas
 	}
 
-	return reader.Read(ctx, blockInfos, dst)
+	var lastErr error
+
+	for _, replica := range block.Replicas {
+		blockClient := c.blocks(replica.Addr)
+		if blockClient == nil {
+			lastErr = ErrNilBlockClient
+			continue
+		}
+
+		rc, err := blockClient.GetBlock(ctx, block.Info.ID)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		n, copyErr := io.Copy(dst, rc)
+		closeErr := rc.Close()
+
+		if copyErr != nil {
+			lastErr = copyErr
+			continue
+		}
+		if closeErr != nil {
+			lastErr = closeErr
+			continue
+		}
+
+		return n, nil
+	}
+
+	if lastErr != nil {
+		return 0, lastErr
+	}
+
+	return 0, ErrNoReadableReplicas
 }
 
 func (c *DFSClient) StatFile(ctx context.Context, path namenode.FilePath) (namenode.FileMetadata, error) {

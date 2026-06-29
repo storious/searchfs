@@ -15,7 +15,6 @@ import (
 func main() {
 	var (
 		namenodeAddr = flag.String("namenode", "http://localhost:9000", "namenode address")
-		datanodeAddr = flag.String("datanode", "http://localhost:9001", "datanode address")
 		blockSize    = flag.Int64("block-size", 64*1024*1024, "block size in bytes")
 	)
 	flag.Parse()
@@ -30,7 +29,6 @@ func main() {
 	fs, err := client.NewDFSClient(
 		*blockSize,
 		1,
-		*datanodeAddr,
 		func(addr string) client.BlockClient {
 			return datanode.NewHTTPClient(addr)
 		},

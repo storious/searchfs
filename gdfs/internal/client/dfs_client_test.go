@@ -42,7 +42,6 @@ func TestDFSClientPutGetStatDeleteFile(t *testing.T) {
 	fileClient, err := NewDFSClient(
 		5,
 		1,
-		dnServer.URL,
 		func(addr string) BlockClient {
 			return datanode.NewHTTPClient(addr)
 		},
