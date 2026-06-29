@@ -1,6 +1,7 @@
 const std = @import("std");
 const command = @import("command.zig");
 const Store = @import("store.zig").Store;
+const response = @import("response.zig");
 
 pub const Engine = struct {
     store: *Store,
@@ -20,14 +21,14 @@ pub const Engine = struct {
 
             .get => |key| blk: {
                 if (self.store.getAt(key, now_ms)) |value| {
-                    break :blk try std.fmt.allocPrint(allocator, "${s}\r\n", .{value});
+                    break :blk try response.bulk(allocator, value);
                 }
                 break :blk try allocator.dupe(u8, "$nil\r\n");
             },
 
             .set => |args| blk: {
                 try self.store.setAt(args.key, args.value, now_ms, null);
-                break :blk try allocator.dupe(u8, "+OK\r\n");
+                break :blk try response.ok(allocator);
             },
 
             .del => |key| blk: {
@@ -50,7 +51,7 @@ pub const Engine = struct {
 
             .setex => |args| blk: {
                 try self.store.setAt(args.key, args.value, now_ms, args.ttl_ms);
-                break :blk try allocator.dupe(u8, "+OK\r\n");
+                break :blk try response.ok(allocator);
             },
         };
     }

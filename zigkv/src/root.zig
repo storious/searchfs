@@ -21,10 +21,12 @@ pub const Store = @import("store.zig").Store;
 pub const command = @import("command.zig");
 pub const engine = @import("engine.zig");
 pub const clock = @import("clock.zig");
+pub const response = @import("response.zig");
 
 test {
     _ = @import("store.zig");
     _ = @import("command.zig");
     _ = @import("engine.zig");
     _ = @import("clock.zig");
+    _ = @import("response.zig");
 }
