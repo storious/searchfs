@@ -13,7 +13,8 @@ pub fn main() !void {
     var engine = zigkv.engine.Engine.init(&store);
 
     const cmd = try zigkv.command.parse("PING");
-    const resp = try engine.executeAt(allocator, cmd, 0);
+    const clock = zigkv.clock.Clock.fixed(0);
+    const resp = try engine.executeAt(allocator, cmd, clock.now());
     defer allocator.free(resp);
 
     std.debug.print("{s}", .{resp});
