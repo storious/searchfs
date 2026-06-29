@@ -12,11 +12,12 @@ import (
 )
 
 type LocalBlockStore struct {
-	root string
+	root     string
+	capacity uint64
 }
 
 func NewLocalBlockStore(root string) *LocalBlockStore {
-	return &LocalBlockStore{root: root}
+	return &LocalBlockStore{root: root, capacity: 1024 * 1024 * 1024}
 }
 
 func (s *LocalBlockStore) Put(ctx context.Context, block *Block) (BlockInfo, error) {
@@ -214,4 +215,39 @@ func copyWithContext(ctx context.Context, dst io.Writer, src io.Reader) (int64, 
 	}
 
 	return written, nil
+}
+
+func (s *LocalBlockStore) Stats() (StorageStats, error) {
+	var stats StorageStats
+	stats.Capacity = s.capacity
+
+	root := filepath.Join(s.root, "blocks")
+
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+
+		stats.Used += uint64(info.Size())
+		stats.Blocks++
+
+		return nil
+	})
+
+	if errors.Is(err, os.ErrNotExist) {
+		return stats, nil
+	}
+	if err != nil {
+		return StorageStats{}, err
+	}
+
+	return stats, nil
 }

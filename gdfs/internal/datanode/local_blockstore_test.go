@@ -103,3 +103,31 @@ func TestLocalBlockStoreDeleteMissingBlock(t *testing.T) {
 	err := store.Delete(ctx, BlockID("missing-block"))
 	require.NoError(t, err)
 }
+
+func TestLocalBlockStoreStats(t *testing.T) {
+	store := NewLocalBlockStore(t.TempDir())
+	ctx := context.Background()
+
+	stats, err := store.Stats()
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), stats.Used)
+	require.Equal(t, uint64(0), stats.Blocks)
+	require.NotZero(t, stats.Capacity)
+
+	_, err = store.Put(ctx, &Block{
+		ID:   "block-001",
+		Data: strings.NewReader("hello"),
+	})
+	require.NoError(t, err)
+
+	_, err = store.Put(ctx, &Block{
+		ID:   "block-002",
+		Data: strings.NewReader("world"),
+	})
+	require.NoError(t, err)
+
+	stats, err = store.Stats()
+	require.NoError(t, err)
+	require.Equal(t, uint64(10), stats.Used)
+	require.Equal(t, uint64(2), stats.Blocks)
+}

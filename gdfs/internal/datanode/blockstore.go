@@ -8,4 +8,5 @@ type BlockStore interface {
 	Delete(ctx context.Context, id BlockID) error
 	Exists(ctx context.Context, id BlockID) bool
 	Stat(ctx context.Context, id BlockID) (BlockInfo, error)
+	Stats() (StorageStats, error)
 }
