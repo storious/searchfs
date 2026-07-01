@@ -166,13 +166,6 @@ pub const Store = struct {
         return self.keysAt(allocator, 0);
     }
 
-    pub fn freeKeys(allocator: std.mem.Allocator, keys_slice: [][]u8) void {
-        for (keys_slice) |key| {
-            allocator.free(key);
-        }
-        allocator.free(keys_slice);
-    }
-
     pub fn len(self: *const Store) usize {
         return self.map.count();
     }
@@ -188,6 +181,12 @@ pub const Store = struct {
         list.deinit(allocator);
     }
 
+    pub fn freeOwnedKeys(allocator: std.mem.Allocator, keys_slice: [][]u8) void {
+        for (keys_slice) |key| {
+            allocator.free(key);
+        }
+        allocator.free(keys_slice);
+    }
     fn removeOwnedEntry(self: *Store, key: []const u8) bool {
         if (self.map.fetchRemove(key)) |old| {
             self.allocator.free(old.key);
@@ -374,7 +373,7 @@ test "keys returns stored keys" {
     try store.set("b", "2", null);
 
     const ks = try store.keys(std.testing.allocator);
-    defer Store.freeKeys(std.testing.allocator, ks);
+    defer Store.freeOwnedKeys(std.testing.allocator, ks);
 
     try std.testing.expectEqual(@as(usize, 2), ks.len);
 }
@@ -387,7 +386,7 @@ test "keysAt excludes and removes expired keys" {
     try store.setAt("expired", "2", 1000, 10);
 
     const ks = try store.keysAt(std.testing.allocator, 1010);
-    defer Store.freeKeys(std.testing.allocator, ks);
+    defer Store.freeOwnedKeys(std.testing.allocator, ks);
 
     try std.testing.expectEqual(@as(usize, 1), ks.len);
     try std.testing.expectEqualStrings("alive", ks[0]);
@@ -403,7 +402,7 @@ test "keysAt returns keys in sorted order" {
     try store.set("a", "1", null);
 
     const ks = try store.keysAt(std.testing.allocator, 0);
-    defer Store.freeKeys(std.testing.allocator, ks);
+    defer Store.freeOwnedKeys(std.testing.allocator, ks);
 
     try std.testing.expectEqualStrings("a", ks[0]);
     try std.testing.expectEqualStrings("b", ks[1]);
