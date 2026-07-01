@@ -130,25 +130,50 @@ pub const Store = struct {
         return false;
     }
 
+    fn isExpired(entry: *const Entry, now_ms: i64) bool {
+        if (entry.expires_at_ms) |deadline| {
+            return now_ms >= deadline;
+        }
+        return false;
+    }
+
     pub fn keysAt(self: *Store, allocator: std.mem.Allocator, now_ms: i64) ![][]u8 {
+        var expired = std.ArrayList([]u8){
+            .items = &.{},
+            .capacity = 0,
+        };
+        defer {
+            for (expired.items) |key| {
+                allocator.free(key);
+            }
+            expired.deinit(allocator);
+        }
+
         var out = std.ArrayList([]u8){
             .items = &.{},
             .capacity = 0,
         };
-
         errdefer {
-            for (out.items) |key| allocator.free(key);
+            for (out.items) |key| {
+                allocator.free(key);
+            }
             out.deinit(allocator);
         }
 
         var it = self.map.iterator();
         while (it.next()) |kv| {
-            if (kv.value_ptr.expires_at_ms) |deadline| {
-                if (now_ms >= deadline) continue;
+            if (isExpired(kv.value_ptr, now_ms)) {
+                const key_copy = try allocator.dupe(u8, kv.key_ptr.*);
+                try expired.append(allocator, key_copy);
+                continue;
             }
 
             const key_copy = try allocator.dupe(u8, kv.key_ptr.*);
             try out.append(allocator, key_copy);
+        }
+
+        for (expired.items) |key| {
+            _ = self.delete(key);
         }
 
         return out.toOwnedSlice(allocator);
@@ -342,4 +367,20 @@ test "keys returns stored keys" {
     defer Store.freeKeys(std.testing.allocator, ks);
 
     try std.testing.expectEqual(@as(usize, 2), ks.len);
+}
+
+test "keysAt excludes and removes expired keys" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+
+    try store.setAt("alive", "1", 1000, 20);
+    try store.setAt("expired", "2", 1000, 10);
+
+    const ks = try store.keysAt(std.testing.allocator, 1010);
+    defer Store.freeKeys(std.testing.allocator, ks);
+
+    try std.testing.expectEqual(@as(usize, 1), ks.len);
+    try std.testing.expectEqualStrings("alive", ks[0]);
+    try std.testing.expectEqual(@as(usize, 1), store.len());
+    try std.testing.expect(store.getAt("expired", 1010) == null);
 }
