@@ -131,3 +131,45 @@ test "engine setex expires" {
         try std.testing.expectEqualStrings("$nil\r\n", resp);
     }
 }
+
+test "engine exists and delete" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+
+    var engine = Engine.init(&store);
+
+    {
+        const cmd = try command.parse("EXISTS name");
+        const resp = try engine.executeAt(std.testing.allocator, cmd, 0);
+        defer std.testing.allocator.free(resp);
+        try std.testing.expectEqualStrings(":0\r\n", resp);
+    }
+
+    {
+        const cmd = try command.parse("SET name zigkv");
+        const resp = try engine.executeAt(std.testing.allocator, cmd, 0);
+        defer std.testing.allocator.free(resp);
+        try std.testing.expectEqualStrings("+OK\r\n", resp);
+    }
+
+    {
+        const cmd = try command.parse("EXISTS name");
+        const resp = try engine.executeAt(std.testing.allocator, cmd, 0);
+        defer std.testing.allocator.free(resp);
+        try std.testing.expectEqualStrings(":1\r\n", resp);
+    }
+
+    {
+        const cmd = try command.parse("DEL name");
+        const resp = try engine.executeAt(std.testing.allocator, cmd, 0);
+        defer std.testing.allocator.free(resp);
+        try std.testing.expectEqualStrings(":1\r\n", resp);
+    }
+
+    {
+        const cmd = try command.parse("DEL name");
+        const resp = try engine.executeAt(std.testing.allocator, cmd, 0);
+        defer std.testing.allocator.free(resp);
+        try std.testing.expectEqualStrings(":0\r\n", resp);
+    }
+}
