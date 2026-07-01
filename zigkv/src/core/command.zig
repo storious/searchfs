@@ -7,6 +7,7 @@ pub const CommandTag = enum {
     del,
     exists,
     setex,
+    clear,
 };
 pub const Command = union(CommandTag) {
     ping: void,
@@ -22,6 +23,7 @@ pub const Command = union(CommandTag) {
         ttl_ms: i64,
         value: []const u8,
     },
+    clear: void,
 };
 
 pub const ParseError = error{
@@ -77,6 +79,11 @@ pub fn parse(input: []const u8) ParseError!Command {
         };
 
         return .{ .setex = .{ .key = key, .ttl_ms = ttl_ms, .value = value } };
+    }
+
+    if (std.ascii.eqlIgnoreCase(op_raw, "CLEAR")) {
+        if (it.next() != null) return ParseError.InvalidArity;
+        return .{ .clear = {} };
     }
 
     return ParseError.UnknownCommand;

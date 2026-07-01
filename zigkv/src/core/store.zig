@@ -90,6 +90,15 @@ pub const Store = struct {
         return false;
     }
 
+    pub fn clear(self: *Store) void {
+        var it = self.map.iterator();
+        while (it.next()) |kv| {
+            self.allocator.free(kv.key_ptr.*);
+            self.allocator.free(kv.value_ptr.value);
+        }
+        self.map.clearRetainingCapacity();
+    }
+
     pub fn len(self: *const Store) usize {
         return self.map.count();
     }

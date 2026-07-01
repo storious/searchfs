@@ -53,6 +53,11 @@ pub const Engine = struct {
                 try self.store.setAt(args.key, args.value, now_ms, args.ttl_ms);
                 break :blk try response.ok(allocator);
             },
+
+            .clear => blk: {
+                self.store.clear();
+                break :blk try response.ok(allocator);
+            },
         };
     }
 };
