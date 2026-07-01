@@ -32,3 +32,40 @@ pub const App = struct {
         return exec.executeAt(self.allocator, cmd, fixed_clock.now());
     }
 };
+
+test "app executes ping" {
+    var app = App.init(std.testing.allocator);
+    defer app.deinit();
+
+    const resp = try app.executeText("PING");
+    defer std.testing.allocator.free(resp);
+
+    try std.testing.expectEqualStrings("+PONG\r\n", resp);
+}
+
+test "app returns parse error response" {
+    var app = App.init(std.testing.allocator);
+    defer app.deinit();
+
+    const resp = try app.executeText("UNKNOWN");
+    defer std.testing.allocator.free(resp);
+
+    try std.testing.expectEqualStrings("-ERR UnknownCommand\r\n", resp);
+}
+
+test "app executes set and get in same instance" {
+    var app = App.init(std.testing.allocator);
+    defer app.deinit();
+
+    {
+        const resp = try app.executeText("SET name zigkv");
+        defer std.testing.allocator.free(resp);
+        try std.testing.expectEqualStrings("+OK\r\n", resp);
+    }
+
+    {
+        const resp = try app.executeText("GET name");
+        defer std.testing.allocator.free(resp);
+        try std.testing.expectEqualStrings("$zigkv\r\n", resp);
+    }
+}
