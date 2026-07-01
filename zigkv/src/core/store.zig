@@ -61,15 +61,7 @@ pub const Store = struct {
     }
 
     pub fn getAt(self: *Store, key: []const u8, now_ms: i64) ?[]const u8 {
-        const entry = self.map.getPtr(key) orelse return null;
-
-        if (entry.expires_at_ms) |deadline| {
-            if (now_ms >= deadline) {
-                _ = self.delete(key);
-                return null;
-            }
-        }
-
+        const entry = self.getLiveEntryPtr(key, now_ms) orelse return null;
         return entry.value;
     }
 
@@ -82,12 +74,7 @@ pub const Store = struct {
     }
 
     pub fn delete(self: *Store, key: []const u8) bool {
-        if (self.map.fetchRemove(key)) |old| {
-            self.allocator.free(old.key);
-            self.allocator.free(old.value.value);
-            return true;
-        }
-        return false;
+        return self.removeOwnedEntry(key);
     }
 
     pub fn clear(self: *Store) void {
@@ -99,17 +86,12 @@ pub const Store = struct {
         self.map.clearRetainingCapacity();
     }
 
-    pub fn cleanupExpiredAt(self: *Store, allocator: std.mem.Allocator, now_ms: i64) !void {
+    pub fn cleanupExpiredAt(self: *Store, allocator: std.mem.Allocator, now_ms: i64) !usize {
         var expired = std.ArrayList([]u8){
             .items = &.{},
             .capacity = 0,
         };
-        defer {
-            for (expired.items) |key| {
-                allocator.free(key);
-            }
-            expired.deinit(allocator);
-        }
+        defer freeKeyListItems(allocator, &expired);
 
         var it = self.map.iterator();
         while (it.next()) |kv| {
@@ -120,24 +102,21 @@ pub const Store = struct {
         }
 
         for (expired.items) |key| {
-            _ = self.delete(key);
+            _ = self.removeOwnedEntry(key);
         }
+
+        return expired.items.len;
     }
 
     pub fn lenAt(self: *Store, allocator: std.mem.Allocator, now_ms: i64) !usize {
-        try self.cleanupExpiredAt(allocator, now_ms);
+        _ = try self.cleanupExpiredAt(allocator, now_ms);
         return self.len();
     }
 
     pub fn ttlAt(self: *Store, key: []const u8, now_ms: i64) i64 {
-        const entry = self.map.getPtr(key) orelse return -2;
+        const entry = self.getLiveEntryPtr(key, now_ms) orelse return -2;
 
         if (entry.expires_at_ms) |deadline| {
-            if (now_ms >= deadline) {
-                _ = self.delete(key);
-                return -2;
-            }
-
             return deadline - now_ms;
         }
 
@@ -145,19 +124,12 @@ pub const Store = struct {
     }
 
     pub fn persistAt(self: *Store, key: []const u8, now_ms: i64) bool {
-        const entry = self.map.getPtr(key) orelse return false;
+        const entry = self.getLiveEntryPtr(key, now_ms) orelse return false;
 
-        if (entry.expires_at_ms) |deadline| {
-            if (now_ms >= deadline) {
-                _ = self.delete(key);
-                return false;
-            }
+        if (entry.expires_at_ms == null) return false;
 
-            entry.expires_at_ms = null;
-            return true;
-        }
-
-        return false;
+        entry.expires_at_ms = null;
+        return true;
     }
 
     fn isExpired(entry: *const Entry, now_ms: i64) bool {
@@ -168,43 +140,20 @@ pub const Store = struct {
     }
 
     pub fn keysAt(self: *Store, allocator: std.mem.Allocator, now_ms: i64) ![][]u8 {
-        var expired = std.ArrayList([]u8){
-            .items = &.{},
-            .capacity = 0,
-        };
-        defer {
-            for (expired.items) |key| {
-                allocator.free(key);
-            }
-            expired.deinit(allocator);
-        }
+        _ = try self.cleanupExpiredAt(allocator, now_ms);
 
         var out = std.ArrayList([]u8){
             .items = &.{},
             .capacity = 0,
         };
-        errdefer {
-            for (out.items) |key| {
-                allocator.free(key);
-            }
-            out.deinit(allocator);
-        }
+        errdefer freeKeyListItems(allocator, &out);
 
         var it = self.map.iterator();
         while (it.next()) |kv| {
-            if (isExpired(kv.value_ptr, now_ms)) {
-                const key_copy = try allocator.dupe(u8, kv.key_ptr.*);
-                try expired.append(allocator, key_copy);
-                continue;
-            }
-
             const key_copy = try allocator.dupe(u8, kv.key_ptr.*);
             try out.append(allocator, key_copy);
         }
 
-        for (expired.items) |key| {
-            _ = self.delete(key);
-        }
         std.mem.sort([]u8, out.items, {}, lessThan);
         return out.toOwnedSlice(allocator);
     }
@@ -230,6 +179,33 @@ pub const Store = struct {
 
     pub fn isEmpty(self: *const Store) bool {
         return self.len() == 0;
+    }
+
+    fn freeKeyListItems(allocator: std.mem.Allocator, list: *std.ArrayList([]u8)) void {
+        for (list.items) |key| {
+            allocator.free(key);
+        }
+        list.deinit(allocator);
+    }
+
+    fn removeOwnedEntry(self: *Store, key: []const u8) bool {
+        if (self.map.fetchRemove(key)) |old| {
+            self.allocator.free(old.key);
+            self.allocator.free(old.value.value);
+            return true;
+        }
+        return false;
+    }
+
+    fn getLiveEntryPtr(self: *Store, key: []const u8, now_ms: i64) ?*Entry {
+        const entry = self.map.getPtr(key) orelse return null;
+
+        if (isExpired(entry, now_ms)) {
+            _ = self.removeOwnedEntry(key);
+            return null;
+        }
+
+        return entry;
     }
 };
 
