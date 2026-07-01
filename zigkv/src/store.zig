@@ -119,3 +119,51 @@ test "ttl expires" {
     try std.testing.expectEqualStrings("value", store.getAt("tmp", 1009).?);
     try std.testing.expect(store.getAt("tmp", 1010) == null);
 }
+
+test "overwrite key replaces value" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+
+    try store.set("name", "old", null);
+    try store.set("name", "new", null);
+
+    try std.testing.expectEqualStrings("new", store.get("name").?);
+}
+
+test "overwrite ttl key with persistent value" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+
+    try store.setAt("k", "ttl", 1000, 10);
+    try store.setAt("k", "persist", 1005, null);
+
+    try std.testing.expectEqualStrings("persist", store.getAt("k", 2000).?);
+}
+
+test "overwrite persistent key with ttl value" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+
+    try store.setAt("k", "persist", 1000, null);
+    try store.setAt("k", "ttl", 1005, 10);
+
+    try std.testing.expectEqualStrings("ttl", store.getAt("k", 1014).?);
+    try std.testing.expect(store.getAt("k", 1015) == null);
+}
+
+test "exists returns false after ttl expiration" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+
+    try store.setAt("tmp", "value", 1000, 10);
+
+    try std.testing.expect(store.existsAt("tmp", 1009));
+    try std.testing.expect(!store.existsAt("tmp", 1010));
+}
+
+test "delete missing key returns false" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+
+    try std.testing.expect(!store.delete("missing"));
+}
