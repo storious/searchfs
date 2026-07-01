@@ -28,13 +28,31 @@ response.zig  format protocol responses
 clock.zig     provide time abstraction
 main.zig      executable entrypoint
 ```
+
 ## Commands
 
-```text
-PING
-SET key value
-GET key
-DEL key
-EXISTS key
-SETEX key ttl_ms value
-```
+| Command | Description |
+|---------|-------------|
+| `PING` | Check whether the engine is alive |
+| `SET key value` | Set a key |
+| `GET key` | Get a key |
+| `DEL key` | Delete a key |
+| `EXISTS key` | Check whether a key exists |
+| `SETEX key ttl_ms value` | Set a key with TTL in milliseconds |
+| `TTL key` | Get remaining TTL |
+| `PERSIST key` | Remove TTL from a key |
+| `KEYS` | List all live keys |
+| `DBSIZE` | Return number of live keys |
+| `CLEAR` | Remove all keys |
+
+## Current Features
+
+- In-memory key-value store
+- Logical TTL and expiration cleanup
+- Command parser
+- Engine execution layer
+- Protocol response formatting
+- Core/runtime separation
+- Single-shot CLI runtime
+- Unit tests
+- Makefile and CI integration
