@@ -1,15 +1,11 @@
-v0.1  HashMap + TTL + text protocol
+v0.1: In-memory store, TTL, parser, engine
 
-v0.2  TCP server + benchmark
+v0.2: CLI / REPL
 
-v0.3  memory limit + LRU/CLOCK
+v0.3: TCP server
 
-v0.4  WAL + recovery
+v0.4: Memory limits and eviction
 
-v0.5  snapshot
+v0.5: WAL and recovery
 
-v0.6  mmap log segment
-
-v0.7  replication toy model
-
-v0.8  SearchRS / GDFS integration
+v0.6: Snapshot and mmap experiments
