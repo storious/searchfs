@@ -75,6 +75,11 @@ pub const Engine = struct {
 
                 break :blk try response.list(allocator, keys);
             },
+
+            .dbsize => blk: {
+                const count = try self.store.lenAt(allocator, now_ms);
+                break :blk try response.integerValue(allocator, @intCast(count));
+            },
         };
     }
 };
@@ -316,4 +321,44 @@ test "keysAt excludes expired keys" {
 
     try std.testing.expectEqual(@as(usize, 1), ks.len);
     try std.testing.expectEqualStrings("alive", ks[0]);
+}
+
+test "engine dbsize" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+
+    var engine = Engine.init(&store);
+
+    {
+        const cmd = try command.parse("DBSIZE");
+        const resp = try engine.executeAt(std.testing.allocator, cmd, 0);
+        defer std.testing.allocator.free(resp);
+        try std.testing.expectEqualStrings(":0\r\n", resp);
+    }
+
+    {
+        const cmd = try command.parse("SET a 1");
+        const resp = try engine.executeAt(std.testing.allocator, cmd, 0);
+        defer std.testing.allocator.free(resp);
+    }
+
+    {
+        const cmd = try command.parse("SETEX b 10 2");
+        const resp = try engine.executeAt(std.testing.allocator, cmd, 1000);
+        defer std.testing.allocator.free(resp);
+    }
+
+    {
+        const cmd = try command.parse("DBSIZE");
+        const resp = try engine.executeAt(std.testing.allocator, cmd, 1005);
+        defer std.testing.allocator.free(resp);
+        try std.testing.expectEqualStrings(":2\r\n", resp);
+    }
+
+    {
+        const cmd = try command.parse("DBSIZE");
+        const resp = try engine.executeAt(std.testing.allocator, cmd, 1010);
+        defer std.testing.allocator.free(resp);
+        try std.testing.expectEqualStrings(":1\r\n", resp);
+    }
 }

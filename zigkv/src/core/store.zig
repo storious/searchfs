@@ -99,6 +99,36 @@ pub const Store = struct {
         self.map.clearRetainingCapacity();
     }
 
+    pub fn cleanupExpiredAt(self: *Store, allocator: std.mem.Allocator, now_ms: i64) !void {
+        var expired = std.ArrayList([]u8){
+            .items = &.{},
+            .capacity = 0,
+        };
+        defer {
+            for (expired.items) |key| {
+                allocator.free(key);
+            }
+            expired.deinit(allocator);
+        }
+
+        var it = self.map.iterator();
+        while (it.next()) |kv| {
+            if (isExpired(kv.value_ptr, now_ms)) {
+                const key_copy = try allocator.dupe(u8, kv.key_ptr.*);
+                try expired.append(allocator, key_copy);
+            }
+        }
+
+        for (expired.items) |key| {
+            _ = self.delete(key);
+        }
+    }
+
+    pub fn lenAt(self: *Store, allocator: std.mem.Allocator, now_ms: i64) !usize {
+        try self.cleanupExpiredAt(allocator, now_ms);
+        return self.len();
+    }
+
     pub fn ttlAt(self: *Store, key: []const u8, now_ms: i64) i64 {
         const entry = self.map.getPtr(key) orelse return -2;
 
@@ -401,4 +431,16 @@ test "keysAt returns keys in sorted order" {
 
     try std.testing.expectEqualStrings("a", ks[0]);
     try std.testing.expectEqualStrings("b", ks[1]);
+}
+
+test "lenAt removes expired keys" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+
+    try store.setAt("alive", "1", 1000, 20);
+    try store.setAt("expired", "2", 1000, 10);
+
+    try std.testing.expectEqual(@as(usize, 2), store.len());
+    try std.testing.expectEqual(@as(usize, 1), try store.lenAt(std.testing.allocator, 1010));
+    try std.testing.expectEqual(@as(usize, 1), store.len());
 }

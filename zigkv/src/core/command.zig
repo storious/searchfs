@@ -11,6 +11,7 @@ pub const CommandTag = enum {
     ttl,
     persist,
     keys,
+    dbsize,
 };
 pub const Command = union(CommandTag) {
     ping: void,
@@ -30,6 +31,7 @@ pub const Command = union(CommandTag) {
     ttl: []const u8,
     persist: []const u8,
     keys: void,
+    dbsize: void,
 };
 
 pub const ParseError = error{
@@ -107,6 +109,11 @@ pub fn parse(input: []const u8) ParseError!Command {
     if (std.ascii.eqlIgnoreCase(op_raw, "KEYS")) {
         if (it.next() != null) return ParseError.InvalidArity;
         return .{ .keys = {} };
+    }
+
+    if (std.ascii.eqlIgnoreCase(op_raw, "DBSIZE")) {
+        if (it.next() != null) return ParseError.InvalidArity;
+        return .{ .dbsize = {} };
     }
 
     return ParseError.UnknownCommand;
@@ -221,4 +228,9 @@ test "parse persist" {
 test "parse keys" {
     const cmd = try parse("KEYS");
     try std.testing.expect(cmd == .keys);
+}
+
+test "parse dbsize" {
+    const cmd = try parse("DBSIZE");
+    try std.testing.expect(cmd == .dbsize);
 }
