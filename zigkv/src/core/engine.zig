@@ -68,6 +68,13 @@ pub const Engine = struct {
                 const changed = self.store.persistAt(key, now_ms);
                 break :blk try response.integer(allocator, changed);
             },
+
+            .keys => blk: {
+                const keys = try self.store.keys(allocator);
+                defer Store.freeKeys(allocator, keys);
+
+                break :blk try response.list(allocator, keys);
+            },
         };
     }
 };
@@ -236,5 +243,61 @@ test "engine ttl" {
         const resp = try engine.executeAt(std.testing.allocator, cmd, 1010);
         defer std.testing.allocator.free(resp);
         try std.testing.expectEqualStrings(":-2\r\n", resp);
+    }
+}
+
+test "engine persist" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+
+    var engine = Engine.init(&store);
+
+    {
+        const cmd = try command.parse("SETEX tmp 10 value");
+        const resp = try engine.executeAt(std.testing.allocator, cmd, 1000);
+        defer std.testing.allocator.free(resp);
+        try std.testing.expectEqualStrings("+OK\r\n", resp);
+    }
+
+    {
+        const cmd = try command.parse("PERSIST tmp");
+        const resp = try engine.executeAt(std.testing.allocator, cmd, 1005);
+        defer std.testing.allocator.free(resp);
+        try std.testing.expectEqualStrings(":1\r\n", resp);
+    }
+
+    {
+        const cmd = try command.parse("TTL tmp");
+        const resp = try engine.executeAt(std.testing.allocator, cmd, 2000);
+        defer std.testing.allocator.free(resp);
+        try std.testing.expectEqualStrings(":-1\r\n", resp);
+    }
+
+    {
+        const cmd = try command.parse("PERSIST tmp");
+        const resp = try engine.executeAt(std.testing.allocator, cmd, 2000);
+        defer std.testing.allocator.free(resp);
+        try std.testing.expectEqualStrings(":0\r\n", resp);
+    }
+}
+
+test "engine keys" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+
+    var engine = Engine.init(&store);
+
+    {
+        const cmd = try command.parse("SET a 1");
+        const resp = try engine.executeAt(std.testing.allocator, cmd, 0);
+        defer std.testing.allocator.free(resp);
+    }
+
+    {
+        const cmd = try command.parse("KEYS");
+        const resp = try engine.executeAt(std.testing.allocator, cmd, 0);
+        defer std.testing.allocator.free(resp);
+
+        try std.testing.expect(std.mem.eql(u8, resp, "$a\r\n"));
     }
 }

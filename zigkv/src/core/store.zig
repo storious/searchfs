@@ -130,6 +130,35 @@ pub const Store = struct {
         return false;
     }
 
+    pub fn keys(self: *Store, allocator: std.mem.Allocator) ![][]u8 {
+        var out = std.ArrayList([]u8){
+            .items = &.{},
+            .capacity = 0,
+        };
+
+        errdefer {
+            for (out.items) |key| {
+                allocator.free(key);
+            }
+            out.deinit(allocator);
+        }
+
+        var it = self.map.iterator();
+        while (it.next()) |kv| {
+            const key_copy = try allocator.dupe(u8, kv.key_ptr.*);
+            try out.append(allocator, key_copy);
+        }
+
+        return out.toOwnedSlice(allocator);
+    }
+
+    pub fn freeKeys(allocator: std.mem.Allocator, keys_slice: [][]u8) void {
+        for (keys_slice) |key| {
+            allocator.free(key);
+        }
+        allocator.free(keys_slice);
+    }
+
     pub fn len(self: *const Store) usize {
         return self.map.count();
     }
@@ -294,4 +323,17 @@ test "persistAt returns false for missing persistent and expired keys" {
 
     try store.setAt("expired", "value", 1000, 10);
     try std.testing.expect(!store.persistAt("expired", 1010));
+}
+
+test "keys returns stored keys" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+
+    try store.set("a", "1", null);
+    try store.set("b", "2", null);
+
+    const ks = try store.keys(std.testing.allocator);
+    defer Store.freeKeys(std.testing.allocator, ks);
+
+    try std.testing.expectEqual(@as(usize, 2), ks.len);
 }

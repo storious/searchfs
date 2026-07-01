@@ -27,3 +27,29 @@ pub fn err(allocator: std.mem.Allocator, name: []const u8) ![]u8 {
 pub fn integerValue(allocator: std.mem.Allocator, value: i64) ![]u8 {
     return std.fmt.allocPrint(allocator, ":{d}\r\n", .{value});
 }
+
+pub fn list(allocator: std.mem.Allocator, items: []const []const u8) ![]u8 {
+    var out = std.ArrayList(u8){
+        .items = &.{},
+        .capacity = 0,
+    };
+    defer out.deinit(allocator);
+
+    try out.append(allocator, '$');
+
+    for (items, 0..) |item, i| {
+        if (i > 0) try out.append(allocator, ' ');
+        try out.appendSlice(allocator, item);
+    }
+
+    try out.appendSlice(allocator, "\r\n");
+    return out.toOwnedSlice(allocator);
+}
+
+test "format list response" {
+    const items = [_][]const u8{ "a", "b" };
+    const resp = try list(std.testing.allocator, &items);
+    defer std.testing.allocator.free(resp);
+
+    try std.testing.expectEqualStrings("$a b\r\n", resp);
+}

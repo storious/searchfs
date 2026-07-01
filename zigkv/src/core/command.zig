@@ -10,6 +10,7 @@ pub const CommandTag = enum {
     clear,
     ttl,
     persist,
+    keys,
 };
 pub const Command = union(CommandTag) {
     ping: void,
@@ -28,6 +29,7 @@ pub const Command = union(CommandTag) {
     clear: void,
     ttl: []const u8,
     persist: []const u8,
+    keys: void,
 };
 
 pub const ParseError = error{
@@ -100,6 +102,11 @@ pub fn parse(input: []const u8) ParseError!Command {
         const key = it.next() orelse return ParseError.InvalidArity;
         if (it.next() != null) return ParseError.InvalidArity;
         return .{ .persist = key };
+    }
+
+    if (std.ascii.eqlIgnoreCase(op_raw, "KEYS")) {
+        if (it.next() != null) return ParseError.InvalidArity;
+        return .{ .keys = {} };
     }
 
     return ParseError.UnknownCommand;
@@ -209,4 +216,9 @@ test "parse persist" {
         .persist => |key| try std.testing.expectEqualStrings("tmp", key),
         else => return error.UnexpectedCommand,
     }
+}
+
+test "parse keys" {
+    const cmd = try parse("KEYS");
+    try std.testing.expect(cmd == .keys);
 }
