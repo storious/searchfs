@@ -114,6 +114,22 @@ pub const Store = struct {
         return -1;
     }
 
+    pub fn persistAt(self: *Store, key: []const u8, now_ms: i64) bool {
+        const entry = self.map.getPtr(key) orelse return false;
+
+        if (entry.expires_at_ms) |deadline| {
+            if (now_ms >= deadline) {
+                _ = self.delete(key);
+                return false;
+            }
+
+            entry.expires_at_ms = null;
+            return true;
+        }
+
+        return false;
+    }
+
     pub fn len(self: *const Store) usize {
         return self.map.count();
     }
@@ -253,4 +269,29 @@ test "ttlAt reports persistent and missing keys" {
 
     try std.testing.expectEqual(@as(i64, -1), store.ttlAt("persist", 1000));
     try std.testing.expectEqual(@as(i64, -2), store.ttlAt("missing", 1000));
+}
+
+test "persistAt removes ttl" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+
+    try store.setAt("tmp", "value", 1000, 10);
+
+    try std.testing.expectEqual(@as(i64, 10), store.ttlAt("tmp", 1000));
+    try std.testing.expect(store.persistAt("tmp", 1005));
+    try std.testing.expectEqual(@as(i64, -1), store.ttlAt("tmp", 2000));
+    try std.testing.expectEqualStrings("value", store.getAt("tmp", 2000).?);
+}
+
+test "persistAt returns false for missing persistent and expired keys" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+
+    try std.testing.expect(!store.persistAt("missing", 1000));
+
+    try store.setAt("persist", "value", 1000, null);
+    try std.testing.expect(!store.persistAt("persist", 1000));
+
+    try store.setAt("expired", "value", 1000, 10);
+    try std.testing.expect(!store.persistAt("expired", 1010));
 }

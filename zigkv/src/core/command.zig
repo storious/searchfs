@@ -9,6 +9,7 @@ pub const CommandTag = enum {
     setex,
     clear,
     ttl,
+    persist,
 };
 pub const Command = union(CommandTag) {
     ping: void,
@@ -26,6 +27,7 @@ pub const Command = union(CommandTag) {
     },
     clear: void,
     ttl: []const u8,
+    persist: []const u8,
 };
 
 pub const ParseError = error{
@@ -92,6 +94,12 @@ pub fn parse(input: []const u8) ParseError!Command {
         const key = it.next() orelse return ParseError.InvalidArity;
         if (it.next() != null) return ParseError.InvalidArity;
         return .{ .ttl = key };
+    }
+
+    if (std.ascii.eqlIgnoreCase(op_raw, "PERSIST")) {
+        const key = it.next() orelse return ParseError.InvalidArity;
+        if (it.next() != null) return ParseError.InvalidArity;
+        return .{ .persist = key };
     }
 
     return ParseError.UnknownCommand;
@@ -190,6 +198,15 @@ test "parse ttl" {
 
     switch (cmd) {
         .ttl => |key| try std.testing.expectEqualStrings("tmp", key),
+        else => return error.UnexpectedCommand,
+    }
+}
+
+test "parse persist" {
+    const cmd = try parse("PERSIST tmp");
+
+    switch (cmd) {
+        .persist => |key| try std.testing.expectEqualStrings("tmp", key),
         else => return error.UnexpectedCommand,
     }
 }

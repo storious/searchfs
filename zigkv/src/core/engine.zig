@@ -63,6 +63,11 @@ pub const Engine = struct {
                 const ttl = self.store.ttlAt(key, now_ms);
                 break :blk try response.integerValue(allocator, ttl);
             },
+
+            .persist => |key| blk: {
+                const changed = self.store.persistAt(key, now_ms);
+                break :blk try response.integer(allocator, changed);
+            },
         };
     }
 };
