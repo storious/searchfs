@@ -23,3 +23,7 @@ pub fn integer(allocator: std.mem.Allocator, value: bool) ![]u8 {
 pub fn err(allocator: std.mem.Allocator, name: []const u8) ![]u8 {
     return std.fmt.allocPrint(allocator, "-ERR {s}\r\n", .{name});
 }
+
+pub fn integerValue(allocator: std.mem.Allocator, value: i64) ![]u8 {
+    return std.fmt.allocPrint(allocator, ":{d}\r\n", .{value});
+}

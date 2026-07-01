@@ -58,6 +58,11 @@ pub const Engine = struct {
                 self.store.clear();
                 break :blk try response.ok(allocator);
             },
+
+            .ttl => |key| blk: {
+                const ttl = self.store.ttlAt(key, now_ms);
+                break :blk try response.integerValue(allocator, ttl);
+            },
         };
     }
 };
@@ -199,4 +204,32 @@ test "engine clear" {
     }
 
     try std.testing.expect(store.isEmpty());
+}
+
+test "engine ttl" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+
+    var engine = Engine.init(&store);
+
+    {
+        const cmd = try command.parse("SETEX tmp 10 value");
+        const resp = try engine.executeAt(std.testing.allocator, cmd, 1000);
+        defer std.testing.allocator.free(resp);
+        try std.testing.expectEqualStrings("+OK\r\n", resp);
+    }
+
+    {
+        const cmd = try command.parse("TTL tmp");
+        const resp = try engine.executeAt(std.testing.allocator, cmd, 1005);
+        defer std.testing.allocator.free(resp);
+        try std.testing.expectEqualStrings(":5\r\n", resp);
+    }
+
+    {
+        const cmd = try command.parse("TTL tmp");
+        const resp = try engine.executeAt(std.testing.allocator, cmd, 1010);
+        defer std.testing.allocator.free(resp);
+        try std.testing.expectEqualStrings(":-2\r\n", resp);
+    }
 }

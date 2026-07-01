@@ -99,6 +99,21 @@ pub const Store = struct {
         self.map.clearRetainingCapacity();
     }
 
+    pub fn ttlAt(self: *Store, key: []const u8, now_ms: i64) i64 {
+        const entry = self.map.getPtr(key) orelse return -2;
+
+        if (entry.expires_at_ms) |deadline| {
+            if (now_ms >= deadline) {
+                _ = self.delete(key);
+                return -2;
+            }
+
+            return deadline - now_ms;
+        }
+
+        return -1;
+    }
+
     pub fn len(self: *const Store) usize {
         return self.map.count();
     }
@@ -217,4 +232,25 @@ test "clear removes all keys" {
     try std.testing.expect(store.isEmpty());
     try std.testing.expect(store.get("a") == null);
     try std.testing.expect(store.get("b") == null);
+}
+
+test "ttlAt reports remaining ttl" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+
+    try store.setAt("tmp", "value", 1000, 10);
+
+    try std.testing.expectEqual(@as(i64, 10), store.ttlAt("tmp", 1000));
+    try std.testing.expectEqual(@as(i64, 1), store.ttlAt("tmp", 1009));
+    try std.testing.expectEqual(@as(i64, -2), store.ttlAt("tmp", 1010));
+}
+
+test "ttlAt reports persistent and missing keys" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+
+    try store.setAt("persist", "value", 1000, null);
+
+    try std.testing.expectEqual(@as(i64, -1), store.ttlAt("persist", 1000));
+    try std.testing.expectEqual(@as(i64, -2), store.ttlAt("missing", 1000));
 }

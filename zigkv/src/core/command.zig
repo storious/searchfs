@@ -8,6 +8,7 @@ pub const CommandTag = enum {
     exists,
     setex,
     clear,
+    ttl,
 };
 pub const Command = union(CommandTag) {
     ping: void,
@@ -24,6 +25,7 @@ pub const Command = union(CommandTag) {
         value: []const u8,
     },
     clear: void,
+    ttl: []const u8,
 };
 
 pub const ParseError = error{
@@ -84,6 +86,12 @@ pub fn parse(input: []const u8) ParseError!Command {
     if (std.ascii.eqlIgnoreCase(op_raw, "CLEAR")) {
         if (it.next() != null) return ParseError.InvalidArity;
         return .{ .clear = {} };
+    }
+
+    if (std.ascii.eqlIgnoreCase(op_raw, "TTL")) {
+        const key = it.next() orelse return ParseError.InvalidArity;
+        if (it.next() != null) return ParseError.InvalidArity;
+        return .{ .ttl = key };
     }
 
     return ParseError.UnknownCommand;
@@ -175,4 +183,13 @@ test "reject invalid setex ttl" {
 test "parse clear" {
     const cmd = try parse("CLEAR");
     try std.testing.expect(cmd == .clear);
+}
+
+test "parse ttl" {
+    const cmd = try parse("TTL tmp");
+
+    switch (cmd) {
+        .ttl => |key| try std.testing.expectEqualStrings("tmp", key),
+        else => return error.UnexpectedCommand,
+    }
 }
