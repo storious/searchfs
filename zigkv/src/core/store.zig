@@ -89,6 +89,14 @@ pub const Store = struct {
         }
         return false;
     }
+
+    pub fn len(self: *const Store) usize {
+        return self.map.count();
+    }
+
+    pub fn isEmpty(self: *const Store) bool {
+        return self.len() == 0;
+    }
 };
 
 test "set and get" {
@@ -166,4 +174,22 @@ test "delete missing key returns false" {
     defer store.deinit();
 
     try std.testing.expect(!store.delete("missing"));
+}
+
+test "store reports length" {
+    var store = Store.init(std.testing.allocator);
+    defer store.deinit();
+
+    try std.testing.expect(store.isEmpty());
+    try std.testing.expectEqual(@as(usize, 0), store.len());
+
+    try store.set("a", "1", null);
+    try store.set("b", "2", null);
+
+    try std.testing.expect(!store.isEmpty());
+    try std.testing.expectEqual(@as(usize, 2), store.len());
+
+    _ = store.delete("a");
+
+    try std.testing.expectEqual(@as(usize, 1), store.len());
 }

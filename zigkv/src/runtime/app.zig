@@ -34,6 +34,14 @@ pub const App = struct {
         var exec = engine.Engine.init(&self.store);
         return exec.executeAt(self.allocator, cmd, self.now_ms);
     }
+
+    pub fn len(self: *const App) usize {
+        return self.store.len();
+    }
+
+    pub fn isEmpty(self: *const App) bool {
+        return self.store.isEmpty();
+    }
 };
 
 test "app executes ping" {
@@ -97,4 +105,20 @@ test "app respects logical time for ttl" {
         defer std.testing.allocator.free(resp);
         try std.testing.expectEqualStrings("$nil\r\n", resp);
     }
+}
+
+test "app exposes store size" {
+    var app = App.init(std.testing.allocator);
+    defer app.deinit();
+
+    try std.testing.expect(app.isEmpty());
+    try std.testing.expectEqual(@as(usize, 0), app.len());
+
+    {
+        const resp = try app.executeText("SET a 1");
+        defer std.testing.allocator.free(resp);
+    }
+
+    try std.testing.expect(!app.isEmpty());
+    try std.testing.expectEqual(@as(usize, 1), app.len());
 }
