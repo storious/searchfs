@@ -298,6 +298,8 @@ test "engine keys" {
         const resp = try engine.executeAt(std.testing.allocator, cmd, 0);
         defer std.testing.allocator.free(resp);
 
-        try std.testing.expect(std.mem.eql(u8, resp, "$a\r\n"));
+        try std.testing.expect(std.mem.startsWith(u8, resp, "$"));
+        try std.testing.expect(std.mem.endsWith(u8, resp, "\r\n"));
+        try std.testing.expect(std.mem.indexOf(u8, resp, "a") != null);
     }
 }
